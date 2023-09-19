@@ -1,0 +1,58 @@
+---
+title: "Bermuda_climate"
+author: "GGG"
+date: "8/10/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+---
+title: "Bermuda_2018_climate"
+author: "GGG"
+date: "8/10/2022"
+output:
+  pdf_document: default
+  pdf: default
+---
+
+```{r}
+library(tidyverse)
+library(readxl)
+library(janitor)
+library(dbplyr)
+```
+
+Importing CSV file
+
+```{r}
+Bermuda_climate_Aug <- read.csv("~/github/HS_Bermuda/BWSClimateReport_201881-2018831.csv")
+head(Bermuda_climate_Aug)
+```
+
+```{r}
+Bermuda_climate_Sept <- read.csv("~/github/HS_Bermuda/BWSClimateReport_201891-2018930.csv")
+head(Bermuda_climate_Sept)
+```
+
+
+```{r}
+bermuda_climate <- rbind(Bermuda_climate_Aug, Bermuda_climate_Sept)
+```
+```{r}
+bermuda_climate$Date <- as.Date(bermuda_climate$Date, format = "%m/%d/%Y")
+```
+```{r}
+
+write_csv(bermuda_climate, path = "~/github/HS_Bermuda/Bermuda_climate_2018.csv")
+
+```
+
+```{r}
+temp_point <- ggplot(data = bermuda_climate, aes(x = Date, y=SST.DEG.C)) + geom_point(color = "Red") + geom_line(color = "Pink") +labs(y = "Max Temp C", x = "Date") + stat_summary(geom = "errorbar", fun.data = mean_se) + theme_classic() + theme(legend.title = element_text(size = 14), legend.text = element_text(size = 12)) + theme(axis.text = element_text(size = 12), axis.text.x = element_text(angle = 45, hjust=1), axis.title = element_text(size = 14)) + scale_x_date(date_labels = "%m/%d",
+date_breaks = "3 days") + scale_y_continuous(breaks = seq(27, 32, 0.5))
+temp_point
+```
+
+

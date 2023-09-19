@@ -1,0 +1,363 @@
+---
+title: "Photosynthesis TPC fitting"
+authors: Hollie Putnam 
+edited by: Hollie Putnam 
+date: 20220829
+output: html_document
+---
+
+# PR data from heatwave timepoint 1 corals
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+
+## install packages if you dont already have them in your library
+if (!require("devtools")) install.packages("devtools")
+if (!require("furrr")) install.packages("furrr")
+if (!require("future")) install.packages("future")
+if (!require("tidyverse")) install.packages("tidyverse")
+if (!require("gridExtra")) install.packages("gridExtra")
+if (!require("ggpubr")) install.packages("ggpubr")
+if (!require("lubridate")) install.packages("lubridate")
+if (!require("cowplot")) install.packages("cowplot")
+if (!require("ggstatsplot")) install.packages("ggstatsplot")
+if ("rTPC" %in% rownames(installed.packages()) == 'FALSE') remotes::install_github("padpadpadpad/rTPC")
+if ("nls.multstart" %in% rownames(installed.packages()) == 'FALSE') install.packages('nls.multstart')
+if ("broom" %in% rownames(installed.packages()) == 'FALSE') install.packages('broom') 
+
+## load libraries
+library('devtools')
+library('tidyverse')
+library('gridExtra')
+library('ggpubr')
+library('lubridate')
+library('cowplot')
+library('ggstatsplot')
+library('rTPC')
+library('nls.multstart')
+library('broom')
+library('car')
+library('scales')
+library('future') ## libraries for parallel processing
+library('furrr') ## libraries for parallel processing
+```
+
+## Import data
+```{r, warning = FALSE}
+Photodata <- read.csv("data/Dec_Photo_extracted_rates.csv")
+```
+
+TPC fitting 
+Padifeld et al **rTPC and nls.multstart: A new pipeline to fit thermal performance curves in r**  
+https://besjournals.onlinelibrary.wiley.com/doi/full/10.1111/2041-210X.13585  
+
+Sharpe Schoolfield 1981 model
+Schoolfield, R. M., Sharpe, P. J. H., & Magnuson, C. E. (1981). Non-linear regression of biological temperature-dependent rate models based on absolute reaction-rate theory. Journal of theoretical biology, 88(4), 719-731. https://doi.org/10.1016/0022-5193(81)90246-0
+
+```{r}
+#Photosynthesis
+Photodata$temp <- as.numeric(Photodata$Temp.Cat)
+Photodata$micromol.cm2.h <- replace(Photodata$micromol.cm2.h, Photodata$micromol.cm2.h<0,0)
+Photodata$transformed.rate <- log10(Photodata$micromol.cm2.h+1)
+
+# choose model
+get_model_names()
+#sharpeschoolhigh_1981
+
+# get start vals
+start_vals <- get_start_vals(Photodata$temp,Photodata$transformed.rate, model_name = 'sharpeschoolhigh_1981')
+
+# get limits
+low_lims <- get_lower_lims(Photodata$temp,Photodata$transformed.rate, model_name = 'sharpeschoolhigh_1981')
+upper_lims <- get_upper_lims(Photodata$temp,Photodata$transformed.rate, model_name = 'sharpeschoolhigh_1981')
+
+#view values
+start_vals
+start_vals <- start_vals %>% replace(is.na(.), 0)
+start_vals
+low_lims
+upper_lims
+```
+
+#GRANDIS
+```{r}
+# grandis CURVE FIT
+# Haplotype_1a
+d.grandis <- Photodata %>% 
+  filter(mtORF=="Haplotype_1a")
+
+#fit 
+grandis.fit <- nls_multstart(transformed.rate~sharpeschoolhigh_1981(temp = temp, r_tref,e,eh,th, tref = 28),
+                                                     data = d.grandis,
+                                                     iter = 500,
+                                                     start_lower = start_vals - 1,
+                                                     start_upper = start_vals + 1,
+                                                     lower = low_lims,
+                                                     upper = upper_lims,
+                                                     supp_errors = 'Y')
+
+grandis.fit
+
+#generate the predicted data
+grandis_new_data <- data.frame(temp = seq(min(d.grandis$temp), max(d.grandis$temp), 0.5))
+grandis.preds <- augment(grandis.fit, newdata = grandis_new_data)
+
+#calculate TPC parameters
+grandis.TCP.res <- calc_params(grandis.fit) %>%
+  mutate_all(round, 2)   # round 
+
+grandis.TCP.res 
+
+### Bootstrapping ambient curve fit    
+# refit model using nlsLM
+grandis.fit_nlsLM <- minpack.lm::nlsLM(transformed.rate~sharpeschoolhigh_1981(temp = temp, r_tref,e,eh,th, tref = 28),
+                        data = d.grandis,
+                        start = coef(grandis.fit),
+                        lower = low_lims,
+                        upper = upper_lims,
+                        weights = rep(1, times = nrow(d.grandis)))
+
+# bootstrap using case resampling
+grandis.boot1 <- Boot(grandis.fit_nlsLM, method = 'case')
+
+# look at the data
+head(grandis.boot1$t)
+
+
+# create predictions of each bootstrapped model
+grandis.boot1_preds <- grandis.boot1$t %>%
+  as.data.frame() %>%
+  drop_na() %>%
+  mutate(iter = 1:n()) %>%
+  group_by_all() %>%
+  do(data.frame(temp = seq(min(d.grandis$temp), max(d.grandis$temp), length.out = 100))) %>%
+  ungroup() %>%
+  mutate(pred = sharpeschoolhigh_1981(temp, r_tref, e, eh, th, tref = 28))
+
+# calculate bootstrapped confidence intervals
+grandis.boot1_conf_preds <- group_by(grandis.boot1_preds, temp) %>%
+  summarise(conf_lower = quantile(pred, 0.025),
+            conf_upper = quantile(pred, 0.975)) %>%
+  ungroup()
+
+# plot bootstrapped CIs
+grandis.CI.plot <- ggplot() +
+  geom_line(aes(temp, .fitted), grandis.preds, col = 'orange') +
+  geom_ribbon(aes(temp, ymin = conf_lower, ymax = conf_upper), grandis.boot1_conf_preds, fill = 'orange', alpha = 0.3) +
+  geom_point(aes(temp, transformed.rate), d.grandis, size = 2, alpha = 0.5,col = 'orange') +
+  theme_bw(base_size = 12) +
+  labs(x = 'Temperature (ºC)',
+       y = 'Log 10 +1 Rate (µmol O2/cm2/h)')
+grandis.CI.plot 
+
+```
+
+#VERRUCOSA
+```{r}
+# verrucosa CURVE FIT
+# P_verrucosa_Haplotype_3b
+d.verrucosa <- Photodata %>% 
+  filter(mtORF=="P_verrucosa_Haplotype_3b")
+
+#fit 
+verrucosa.fit <- nls_multstart(transformed.rate~sharpeschoolhigh_1981(temp = temp, r_tref,e,eh,th, tref = 28),
+                                                     data = d.verrucosa,
+                                                     iter = 500,
+                                                     start_lower = start_vals - 1,
+                                                     start_upper = start_vals + 1,
+                                                     lower = low_lims,
+                                                     upper = upper_lims,
+                                                     supp_errors = 'Y')
+
+verrucosa.fit
+
+#generate the predicted data
+verrucosa_new_data <- data.frame(temp = seq(min(d.verrucosa$temp), max(d.verrucosa$temp), 0.5))
+verrucosa.preds <- augment(verrucosa.fit, newdata = verrucosa_new_data)
+
+#calculate TPC parameters
+verrucosa.TCP.res <- calc_params(verrucosa.fit) %>%
+  mutate_all(round, 2)   # round 
+
+verrucosa.TCP.res 
+
+# refit model using nlsLM
+verrucosa.fit_nlsLM <- minpack.lm::nlsLM(transformed.rate~sharpeschoolhigh_1981(temp = temp, r_tref,e,eh,th, tref = 28),
+                        data = d.verrucosa,
+                        start = coef(verrucosa.fit),
+                        lower = low_lims,
+                        upper = upper_lims,
+                        weights = rep(1, times = nrow(d.verrucosa)))
+
+# bootstrap using case resampling
+verrucosa.boot1 <- Boot(verrucosa.fit_nlsLM, method = 'case')
+
+# look at the data
+head(verrucosa.boot1$t)
+
+
+# create predictions of each bootstrapped model
+verrucosa.boot1_preds <- verrucosa.boot1$t %>%
+  as.data.frame() %>%
+  drop_na() %>%
+  mutate(iter = 1:n()) %>%
+  group_by_all() %>%
+  do(data.frame(temp = seq(min(d.verrucosa$temp), max(d.verrucosa$temp), length.out = 100))) %>%
+  ungroup() %>%
+  mutate(pred = sharpeschoolhigh_1981(temp, r_tref, e, eh, th, tref = 28))
+
+# calculate bootstrapped confidence intervals
+verrucosa.boot1_conf_preds <- group_by(verrucosa.boot1_preds, temp) %>%
+  summarise(conf_lower = quantile(pred, 0.025),
+            conf_upper = quantile(pred, 0.975)) %>%
+  ungroup()
+
+# plot bootstrapped CIs
+verrucosa.CI.plot <- ggplot() +
+  geom_line(aes(temp, .fitted), verrucosa.preds, col = 'cyan') +
+  geom_ribbon(aes(temp, ymin = conf_lower, ymax = conf_upper), verrucosa.boot1_conf_preds, fill = 'cyan', alpha = 0.3) +
+  geom_point(aes(temp, transformed.rate), d.verrucosa, size = 2, alpha = 0.5,col = 'cyan') +
+  theme_bw(base_size = 12) +
+  labs(x = 'Temperature (ºC)',
+       y = 'Log 10 +1 Rate (µmol O2/cm2/h)')
+verrucosa.CI.plot
+
+```
+#Plot all curves together
+```{r}
+ #set plot colors
+cols <- c("grandis"="orange",  "verrucosa"="cyan")
+  
+# plot data and model fit
+TPC.plot <- ggplot(data=Photodata, aes(x=temp)) +
+   geom_point(aes(temp, transformed.rate, color="grandis"), d.grandis, size = 2, alpha = 0.5) +
+   #geom_point(aes(temp, transformed.rate, color="meandrina"), d.meandrina, size = 2, alpha = 0.5) +
+     geom_point(aes(temp, transformed.rate, color="verrucosa"), d.verrucosa, size = 2, alpha = 0.5) +
+   geom_line(aes(temp, .fitted), grandis.preds, col = 'orange', size=2) +
+   #geom_line(aes(temp, .fitted), meandrina.preds, col = "black", size=2) +
+   geom_line(aes(temp, .fitted), verrucosa.preds, col = "cyan", size=2) +
+   geom_ribbon(aes(temp, ymin = conf_lower, ymax = conf_upper), grandis.boot1_conf_preds, fill = "orange", alpha = 0.3) +
+   #geom_ribbon(aes(temp, ymin = conf_lower, ymax = conf_upper), meandrina.boot1_conf_preds, fill = 'black', alpha = 0.3) +
+  geom_ribbon(aes(temp, ymin = conf_lower, ymax = conf_upper), verrucosa.boot1_conf_preds, fill = 'cyan', alpha = 0.3) +
+   xlim(21,37)+
+   scale_x_continuous(breaks=c(22,24,26,28,30,32,34,36))+
+   theme_bw(base_size = 12) +
+   scale_colour_manual(name="Morphology",values=cols)+
+   theme(legend.position = "none",
+         panel.border = element_blank(), panel.grid.major = element_blank(),
+         panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"))+
+   labs(x = 'Temperature (ºC)',
+        y = expression("Log 10 +1 Rate"~µmol~O[2] ~cm^{-2}~h^{-1}))
+
+TPC.plot 
+
+ggsave("output/Dec_TPC_SharpSchool_Photosynthesis.pdf", TPC.plot, dpi=300, w=8, h=8, units="in")
+```
+
+# Bootstrap CI for all TPC parameters
+```{r}
+broom::tidy(grandis.fit_nlsLM)
+#broom::tidy(meandrina.fit_nlsLM)
+broom::tidy(verrucosa.fit_nlsLM)
+
+```
+#GRANDIS
+```{r}
+#calculate all the TPC parameters
+grandis.extra_params <- calc_params(grandis.fit_nlsLM) %>%
+  pivot_longer(everything(), names_to =  'param', values_to = 'estimate')
+
+#calculate CIs for all the TPC parameters
+grandis.ci_extra_params <- Boot(grandis.fit_nlsLM, f = function(x){unlist(calc_params(x))}, labels = names(calc_params(grandis.fit_nlsLM)), R = 200, method = 'case') %>%
+  confint(., method = 'perc') %>%
+  as.data.frame() %>%
+  rename(conf_lower = 1, conf_upper = 2) %>%
+  rownames_to_column(., var = 'param') %>%
+  mutate(method = 'case bootstrap')
+
+#join the parameters and CIs  
+grandis.ci_extra_params <- left_join(grandis.ci_extra_params, grandis.extra_params)
+grandis.ci_extra_params$Treatment <- "Haplotype_1a"
+```
+
+
+
+#VERRUCOSA
+```{r}
+#calculate all the TPC parameters
+verrucosa.extra_params <- calc_params(verrucosa.fit_nlsLM) %>%
+  pivot_longer(everything(), names_to =  'param', values_to = 'estimate')
+
+#calculate CIs for all the TPC parameters
+verrucosa.ci_extra_params <- Boot(verrucosa.fit_nlsLM, f = function(x){unlist(calc_params(x))}, labels = names(calc_params(verrucosa.fit_nlsLM)), R = 200, method = 'case') %>%
+  confint(., method = 'perc') %>%
+  as.data.frame() %>%
+  rename(conf_lower = 1, conf_upper = 2) %>%
+  rownames_to_column(., var = 'param') %>%
+  mutate(method = 'case bootstrap')
+  
+#join the parameters and CIs  
+verrucosa.ci_extra_params <- left_join(verrucosa.ci_extra_params, verrucosa.extra_params)
+verrucosa.ci_extra_params$Treatment <- "P_verrucosa_Haplotype_3b"
+```
+
+#Join Morphology estimates and CIs
+```{r}
+All_params <- rbind(grandis.ci_extra_params,  verrucosa.ci_extra_params)
+All_params <- All_params %>% 
+ mutate_if(is.numeric, round, 2)
+
+#Plot all of the estimates
+estimate.plots <- ggplot(All_params, aes(Treatment, estimate, color=Treatment)) +
+  geom_point(size = 2) +
+  scale_color_manual(name="Treatment", values=c("orange", "cyan"))+
+  geom_linerange(aes(ymin = conf_lower, ymax = conf_upper)) +
+  theme_bw() +
+  facet_wrap(~param, scales = 'free_y') +
+  scale_x_discrete('')
+
+estimate.plots
+
+#filter to only the most relavent and well characterized parameters
+All_params <- All_params %>% 
+  filter(!param=="ctmin") %>%
+  #filter(!param=="rmax") %>%
+  filter(!param=="skewness") %>%
+  filter(!param=="topt") %>%
+  filter(!param=="thermal_tolerance") %>%
+  filter(!param=="q10") %>%
+  filter(!param=="e") %>%
+  filter(!param=="breadth")
+  
+#view estimate plots
+estimate.plots <- ggplot(All_params, aes(Treatment, estimate, color=Treatment)) +
+  geom_point(size = 2) +
+  scale_color_manual(name="Treatment", values=c("orange", "cyan"))+
+  geom_linerange(aes(ymin = conf_lower, ymax = conf_upper)) +
+  theme_bw() +
+  labs(y = NULL)+
+  theme(axis.title.x=element_blank(),
+        axis.text.x=element_blank(),
+        legend.position = "top",
+        strip.background = element_blank(), 
+        strip.placement = "outside") +
+  facet_wrap(~param, scales = 'free_y', nrow=1)+
+             #labeller = as_labeller(c(e = "e (Energy)", eh = " eh (Energy)", rmax= "Rmax (~nmol~O[2] ~larva^{-1}~min^{-1})",topt="Topt (Temperature °C)")), strip.position = "left") +
+  scale_x_discrete('')
+
+estimate.plots
+
+ggsave("output/Dec_TPC_estimates_SharpSchool_Photosynthesis.pdf", estimate.plots, dpi=300, w=6, h=2, units="in")
+``` 
+
+#Plot Curve and Estimate Output
+```{r}
+#generate a combined figure of TPCs and estimate plots
+figure <- ggarrange(TPC.plot , estimate.plots,
+                    labels = c("A", "B"),
+                    ncol = 1, nrow = 2,
+                    heights=c(1,0.5))
+figure
+
+ggsave("output/Dec_Photosynthesis_TPC_and_estimates.pdf", figure, dpi=300, w=6, h=8, units="in")
+
+```

@@ -1,0 +1,81 @@
+"","colony_id","Light_Value","micromol.L.s","Species","Run","Chamber.Vol.L"
+"1","BK-7","0",-0.000409135338345751,"Blank",17,0.606
+"2","BK-7","124",-0.000437339901477786,"Blank",17,0.606
+"3","BK-7","165",-0.000669807692307672,"Blank",17,0.606
+"4","BK-7","233",-0.0005458333333333,"Blank",17,0.606
+"5","BK-7","289",-0.000552479838709814,"Blank",17,0.606
+"6","BK-7","32",-0.000457467532467362,"Blank",17,0.606
+"7","BK-7","341",-0.000527717391304477,"Blank",17,0.606
+"8","BK-7","413",-0.000267897435897393,"Blank",17,0.606
+"9","BK-7","517",-0.000311804511278097,"Blank",17,0.606
+"10","BK-7","82",-0.00052669213139794,"Blank",17,0.606
+"11","Dlab-A6","0",0.00185982495765137,"Diploria labyrinthiformis",17,0.593
+"12","Dlab-A6","124",0.00830981116584579,"Diploria labyrinthiformis",17,0.593
+"13","Dlab-A6","165",0.0109269999999995,"Diploria labyrinthiformis",17,0.593
+"14","Dlab-A6","233",0.0142726006191951,"Diploria labyrinthiformis",17,0.593
+"15","Dlab-A6","289",0.0164944444444445,"Diploria labyrinthiformis",17,0.593
+"16","Dlab-A6","32",0.00210092879256962,"Diploria labyrinthiformis",17,0.593
+"17","Dlab-A6","341",0.0170874999999999,"Diploria labyrinthiformis",17,0.593
+"18","Dlab-A6","413",0.0170285964912278,"Diploria labyrinthiformis",17,0.593
+"19","Dlab-A6","517",0.0172983043478267,"Diploria labyrinthiformis",17,0.593
+"20","Dlab-A6","82",-0.0406209890109925,"Diploria labyrinthiformis",17,0.593
+"21","Mcav-B6","0",-0.00494349845201275,"Montastraea cavernosa",17,0.592
+"22","Mcav-B6","124",0.00219685483870979,"Montastraea cavernosa",17,0.592
+"23","Mcav-B6","165",0.00346352173913038,"Montastraea cavernosa",17,0.592
+"24","Mcav-B6","233",0.00481516146688561,"Montastraea cavernosa",17,0.592
+"25","Mcav-B6","289",0.00591466165413531,"Montastraea cavernosa",17,0.592
+"26","Mcav-B6","32",-0.00294316239316239,"Montastraea cavernosa",17,0.592
+"27","Mcav-B6","341",0.00745231990232001,"Montastraea cavernosa",17,0.592
+"28","Mcav-B6","413",0.00830955882352919,"Montastraea cavernosa",17,0.592
+"29","Mcav-B6","517",0.00941674901185825,"Montastraea cavernosa",17,0.592
+"30","Mcav-B6","82",-3.36080586081419e-05,"Montastraea cavernosa",17,0.592
+"31","Mcav-F6","0",-0.00384252747252772,"Montastraea cavernosa",17,0.595
+"32","Mcav-F6","124",0.0015012254901961,"Montastraea cavernosa",17,0.595
+"33","Mcav-F6","165",0.00241798029556657,"Montastraea cavernosa",17,0.595
+"34","Mcav-F6","233",0.00334450549450548,"Montastraea cavernosa",17,0.595
+"35","Mcav-F6","289",0.00397081807081811,"Montastraea cavernosa",17,0.595
+"36","Mcav-F6","32",-0.00265936752136738,"Montastraea cavernosa",17,0.595
+"37","Mcav-F6","341",0.00468308270676678,"Montastraea cavernosa",17,0.595
+"38","Mcav-F6","413",0.00507396245059288,"Montastraea cavernosa",17,0.595
+"39","Mcav-F6","517",0.00534980237154161,"Montastraea cavernosa",17,0.595
+"40","Mcav-F6","82",-0.00017357264957268,"Montastraea cavernosa",17,0.595
+"41","Mdec-C6","0",-0.00188378260869574,"Madracis decactis",17,0.602
+"42","Mdec-C6","124",0.00193909313725491,"Madracis decactis",17,0.602
+"43","Mdec-C6","165",0.00241373626373619,"Madracis decactis",17,0.602
+"44","Mdec-C6","233",0.00281774767378217,"Madracis decactis",17,0.602
+"45","Mdec-C6","289",0.00314706521739134,"Madracis decactis",17,0.602
+"46","Mdec-C6","32",-0.000861010728402074,"Madracis decactis",17,0.602
+"47","Mdec-C6","341",0.00331417582417571,"Madracis decactis",17,0.602
+"48","Mdec-C6","413",0.00389241486068117,"Madracis decactis",17,0.602
+"49","Mdec-C6","517",0.00394664224664215,"Madracis decactis",17,0.602
+"50","Mdec-C6","82",0.000684291497975696,"Madracis decactis",17,0.602
+"51","Mdec-F6","0",-0.00133030075187973,"Madracis decactis",17,0.604
+"52","Mdec-F6","124",0.000932862903225758,"Madracis decactis",17,0.604
+"53","Mdec-F6","165",0.0010063467492259,"Madracis decactis",17,0.604
+"54","Mdec-F6","233",0.00116531701890996,"Madracis decactis",17,0.604
+"55","Mdec-F6","289",0.00118240259740283,"Madracis decactis",17,0.604
+"56","Mdec-F6","32",-0.000963846153846418,"Madracis decactis",17,0.604
+"57","Mdec-F6","341",0.00152870826491533,"Madracis decactis",17,0.604
+"58","Mdec-F6","413",0.0017249999999999,"Madracis decactis",17,0.604
+"59","Mdec-F6","517",0.00178945054945066,"Madracis decactis",17,0.604
+"60","Mdec-F6","82",0.000100320071307004,"Madracis decactis",17,0.604
+"61","Past-A6","0",-0.00324702797202849,"Porites astreoides",17,0.591
+"62","Past-A6","124",0.00191263043478257,"Porites astreoides",17,0.591
+"63","Past-A6","165",0.00252518059855507,"Porites astreoides",17,0.591
+"64","Past-A6","233",0.00333296703296697,"Porites astreoides",17,0.591
+"65","Past-A6","289",0.0033964920948618,"Porites astreoides",17,0.591
+"66","Past-A6","32",-0.00275155279503071,"Porites astreoides",17,0.591
+"67","Past-A6","341",0.00414035087719301,"Porites astreoides",17,0.591
+"68","Past-A6","413",0.00474131578947377,"Porites astreoides",17,0.591
+"69","Past-A6","517",0.00504529282977518,"Porites astreoides",17,0.591
+"70","Past-A6","82",-0.000494549549549546,"Porites astreoides",17,0.591
+"71","Past-D6","0",-0.00345257352941182,"Porites astreoides",17,0.601
+"72","Past-D6","124",0.00194081027667965,"Porites astreoides",17,0.601
+"73","Past-D6","165",0.00278306521739143,"Porites astreoides",17,0.601
+"74","Past-D6","233",0.00355801470588237,"Porites astreoides",17,0.601
+"75","Past-D6","289",0.00404108374384238,"Porites astreoides",17,0.601
+"76","Past-D6","32",-0.00196667487684732,"Porites astreoides",17,0.601
+"77","Past-D6","341",0.00437164750957867,"Porites astreoides",17,0.601
+"78","Past-D6","413",0.00485759803921569,"Porites astreoides",17,0.601
+"79","Past-D6","517",0.00482110837438411,"Porites astreoides",17,0.601
+"80","Past-D6","82",-5.10431484115739e-05,"Porites astreoides",17,0.601

@@ -1,0 +1,45 @@
+---
+title: "Photosynthesis parameters summary"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+```
+
+```{r}
+library(plotrix)
+library(Hmisc)
+library(tidyverse)
+```
+
+# Import PI curve fitted parameters for each individual
+```{r}
+pars <- read_csv("output/1_pi_curve_pars_nls.csv")
+```
+
+# Import sample metadata
+```{r}
+md <- read_csv("data/1_pi_curves/coral_metadata.csv")
+
+df <- left_join(pars, md)
+```
+
+# Plot data with mean ± SE for each species/site
+```{r, fig.height = 8}
+
+df <- df %>%
+  pivot_longer(cols=Am:Ik, names_to="variable")
+
+# Facet grid with common y-scale for each variable
+pdf("output/PI_metrics_nls.pdf")
+df %>%
+  ggplot(aes(x = species, y = value,fill=species)) +
+  geom_boxplot() +
+  facet_wrap(~variable, scales = "free_y") +
+  geom_jitter(width = 0.1)
+dev.off()
+
+```
+
+

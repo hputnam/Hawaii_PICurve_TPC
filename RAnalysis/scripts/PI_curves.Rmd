@@ -1,0 +1,1048 @@
+---
+title: "Photosynthesis and respiration rate calculations"
+output: html_document
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+
+## install packages if you dont already have them in your library
+if (!require("devtools")) install.packages("devtools")
+if (!require("furrr")) install.packages("furrr")
+if (!require("future")) install.packages("future")
+if (!require("tidyverse")) install.packages("tidyverse")
+if (!require("lubridate")) install.packages("lubridate")
+if (!require("cowplot")) install.packages("cowplot")
+if (!require("LoLinR")) install_github('colin-olito/LoLinR') 
+
+## load libraries
+library(devtools)
+library(LoLinR)
+library(tidyverse)
+library(lubridate)
+library(cowplot)
+library(broom)
+library(plotrix)
+library(Hmisc)
+library(rTPC)
+library(nls.multstart)
+
+## libraries for parallel processing
+library(future)
+library(furrr)
+```
+
+## Import metadata
+```{r, warning = FALSE}
+path.p <- "data/1_pi_curves/" #the location of all your respirometry files 
+
+# List data files
+file.names <- list.files(path = path.p, pattern = "csv$")  # list all csv file names in the folder
+file.names <- file.names[!grepl("metadata", file.names)]   # omit metadata from files to be read in as data
+
+# Load PI curve sample metadata (i.e., which corals were in which runs)
+sample.info <- read_csv(file = "data/1_pi_curves/1_pi_curves_sample_metadata.csv")
+
+# Load PI curve run metadata (i.e., light levels and interval times for each run)
+run.info <- read_csv(file = "data/1_pi_curves/1_pi_curves_run_metadata.csv")
+
+# Join all coral and run metadata
+metadata <- full_join(sample.info, run.info) %>%
+  mutate(Date = as_date(as.character(Date), format = "%Y%m%d", tz = "Atlantic"))
+
+# Select only certain columns
+metadata <- metadata %>%
+  select(Species, colony_id, Run, Temp.Cat, Chamber.Vol.L, Date, Start.time, Stop.time, Light_Value, Light_Level)
+```
+
+
+# Read in all data files
+```{r, results="hide", message=FALSE}
+df <- tibble(file.name = file.names) %>%
+  mutate(colony_id = gsub("_.*", "", file.name),                              # Get colony_id from filename
+          info = map(colony_id, ~filter(metadata, colony_id == .)),           # Get associated sample info
+         data0 = map(file.name, ~read_csv(file.path(path.p, .), skip=1, col_types = cols(.default = "d", Time = "t"))))   # Get associated O2 data
+
+# Select only Time, Value, and Temp columns from O2 data
+df <- df %>%
+  mutate(data0 = map(data0, ~select(., Time, Value, Temp)))%>%
+  mutate(data0 = map(data0, ~(.x %>% filter(complete.cases(.))))) #remove NAs 
+
+```
+
+## Use the time breaks in the sample info to link O2 data with light levels
+```{r, warning = FALSE}
+df <- df %>%
+  mutate(intervals = map2(data0, info, function(.x, .y) {
+    split(.x, f = cut(as.numeric(.x$Time), breaks = as.numeric(c(.y$Start.time, last(.y$Stop.time))),
+                      labels = as.character(.y$Light_Value)))})) %>%
+  mutate(data = map(intervals, ~ unnest(tibble(.), .id = "Light_Value")))
+
+```
+
+### Thin data
+```{r, fig.height = 8, fig.width = 8}
+# Set thinning parameter
+thin_par <- 20
+
+# Thin data for all samples
+df <- df %>%
+  mutate(thin_data = map(data, ~ slice(., seq(1, nrow(.), thin_par))))
+
+# Create plots for full dataset and thinned data
+df <- df %>%
+  mutate(data_plot = map2(data, colony_id, ~ ggplot(.x, aes(x = Time, y = Value)) + 
+                            facet_wrap(~ as.numeric(Light_Value), scales = "free") +
+                            geom_point() +
+                            labs(title = .y)),
+    thin_data_plot = map2(thin_data, colony_id, ~ ggplot(.x, aes(x = Time, y = Value)) + 
+                            facet_wrap(~ as.numeric(Light_Value), scales = "free") +
+                            geom_point() +
+                            labs(title = .y)))
+
+# Example of plots
+cowplot::plot_grid(df$data_plot[[1]], df$thin_data_plot[[1]], nrow = 2,
+                   labels = c("Example plot: all data", "Example plot: thinned data"))
+```
+
+#### The full or thinned data plot for any sample can be accessed like this:
+```
+df %>%
+  filter(colony_id == "ACR-185") %>%
+  pull(thin_data_plot)
+```
+
+# Fit regressions to each interval for each sample
+```{r}
+# Define function for fitting LoLinR regressions to be applied to all intervals for all samples
+fit_reg <- function(df) {
+  rankLocReg(xall = as.numeric(df$Time), yall = df$Value, 
+             alpha = 0.2, method = "pc", verbose = FALSE)
+}
+
+# Setup for parallel processing
+future::plan(multisession)
+
+# Map LoLinR function onto all intervals of each sample's thinned dataset
+df <- df %>%
+  mutate(regs = furrr::future_map(thin_data, function(.) {       # future_map executes function in parallel
+    group_by(., Light_Value) %>%
+    do(rankLcRg = fit_reg(.))
+  }))
+
+## Now 'regs' contains the fitted local regressions for each interval of each sample's thinned dataset
+
+# Define function to pull out and plot regression diagnostics
+plot_rankLcRg <- function(colony_id, interval_number) {
+  df %>%
+    filter(colony_id == colony_id) %>%
+    pluck("regs", 1, "rankLcRg", interval_number) %>%
+    plot()
+}
+```
+
+#### The diagnostics for any regression can be plotted by specifying a colony_id and the number of the light curve interval:
+```{r}
+# Define function to pull out and plot regression diagnostics
+# plot_rankLcRg <- function(colony_id, interval_number) {
+#   df %>%
+#     filter(colony_id == colony_id) %>%
+#     pluck("regs", 1, "rankLcRg", interval_number) %>%
+#     plot()
+# }
+#THIS FUNCTION IS NOT WORKING BY COLONYID
+# pdf("output/Past-D1_test.pdf")
+# plot_rankLcRg("Past-D1", 1)
+# plot_rankLcRg("Past-D1", 2)
+# plot_rankLcRg("Past-D1", 3)
+# plot_rankLcRg("Past-D1", 4)
+# plot_rankLcRg("Past-D1", 5)
+# plot_rankLcRg("Past-D1", 6)
+# plot_rankLcRg("Past-D1", 7)
+# plot_rankLcRg("Past-D1", 8)
+# plot_rankLcRg("Past-D1", 9)
+# plot_rankLcRg("Past-D1", 10)
+# dev.off()
+```
+
+### Extract slope of best regression for each interval for each sample
+```{r}
+df.out <- df %>% 
+  unnest(regs) %>%
+  mutate(micromol.L.s = map_dbl(rankLcRg, ~ pluck(., "allRegs", "b1", 1)))
+
+#verify sample numbers
+unique(df.out[[2]])
+length(unique(df.out[[2]]))
+
+xx <- select(df.out,colony_id, Light_Value, micromol.L.s)
+xx$grouping.id <- paste0(xx$colony_id, "-",xx$Light_Value)
+nrow(xx)
+nrow(distinct(xx))
+
+mx <- select(metadata, Species, colony_id, Run, Chamber.Vol.L, Temp.Cat)
+nrow(mx)
+nrow(distinct(df))
+
+pr <- left_join(xx, mx, by="colony_id")
+length(unique(pr$colony_id))
+nrow(distinct(pr))
+pr <-distinct(pr)
+  
+# Write to output file
+write.csv(pr, "output/pi_curve_extracted_rates_Raw.csv")
+```
+
+
+# Adjust by chamber volume, subtract blank, and normalize to surface area
+```{r}
+
+###Remove extra light step from Run 1
+pr <-pr %>% filter(!Light_Value>550)
+length(unique(pr$colony_id))
+
+# Correct for chamber volume 
+pr <- pr %>% mutate(micromol.s = micromol.L.s * Chamber.Vol.L)
+length(unique(pr$colony_id))
+
+# Correct for blank rates
+
+# Get blank values -- average for each run and light value in case multiple blanks
+blanks <- pr %>%
+  filter(grepl("BK", colony_id)) %>%
+  group_by(Temp.Cat, Light_Value) %>%
+  summarise(micromol.s.blank=mean(micromol.s))%>%
+  mutate(blank_id=paste0(Temp.Cat,"-",Light_Value))
+
+### generate a key for the blank id
+pr <- pr %>%
+  mutate(blank_id=paste0(Temp.Cat,"-",Light_Value))
+length(unique(pr$colony_id))
+
+#plot blank values
+blanks %>% ggplot(aes(x=as.numeric(Light_Value), y=micromol.s.blank,colour = as.factor(Temp.Cat)))+
+  geom_point()+
+  geom_line()
+
+anova(lm(micromol.s.blank~as.factor(Light_Value)*Temp.Cat, data=blanks))
+# 
+# #remove redundant columns in blanks prior to merging with data
+# blanks <- blanks %>%
+#   select("colony_id", "Run_blank_light", "micromol.s.blank")
+# 
+
+
+#####
+# SAMPLES ARE GETTING TRUNCATED HERE
+#####
+# 
+pr  <- left_join(pr ,blanks,by = "blank_id")
+length(unique(pr$colony_id))
+
+
+#Join blank values with rest of data and subtract values from samples for same run and light value
+pr <- pr %>%
+  mutate(micromol.s.adj = micromol.s - micromol.s.blank) %>%
+  # After correcting for blank values, remove blanks from data
+  filter(!grepl("BK", colony_id))
+length(unique(pr$colony_id))
+
+
+# Import surface area data
+sa <- read.csv("output/1_surface_area.csv")
+
+# Join surface area with rest of data
+pr <- left_join(pr, select(sa, colony_id, surface.area.cm2))
+length(unique(pr$colony_id))
+
+pr  <- dplyr::inner_join(
+   pr ,
+   dplyr::select(sa, -any_of(names(pr)), colony_id),
+   by = "colony_id"
+)
+length(unique(pr$colony_id))
+
+# Normalize rates by surface area
+pr <- pr %>%
+  mutate(micromol.cm2.s = micromol.s.adj / surface.area.cm2,
+         micromol.cm2.h = micromol.cm2.s * 3600)
+length(unique(pr$colony_id))
+```
+
+# Write extracted rates to output file
+```{r}
+# Select variables to write to file
+pr.out <- pr %>% 
+  select(Species, colony_id, Light_Value.x, Run, micromol.cm2.s, micromol.cm2.h)
+length(unique(pr.out$colony_id))
+
+# Write to output file
+write.csv(pr.out, "output/pi_curve_extracted_rates.csv")
+```
+
+
+
+
+
+
+
+
+
+<!-- # Define data   -->
+
+<!-- ```{r} -->
+<!-- #specify data -->
+<!-- Data <- pr.out -->
+<!-- Data$PAR <- as.numeric(Data$Light_Value.x) -->
+<!-- Data$Pc <- as.numeric(Data$micromol.cm2.h) -->
+
+
+<!-- Data <- Data %>%  -->
+<!--   filter(!Run %in% c(4,5,6)) %>%  -->
+<!--   filter(!colony_id %in% c("Mdec-D3", "Mcav-B2", "Dlab-B7", "Dlab-D4", "Dlab-F6")) -->
+
+<!-- Data %>% -->
+<!-- ggplot(aes(x=PAR, y=Pc, color=Species))+ -->
+<!--   geom_point() -->
+<!-- ``` -->
+
+<!-- # Define PI curve function as a nonlinear Least Squares regression of a quadratic fit, test nls fit -->
+<!-- #Pc ~ (Am*((AQY*PAR)/(sqrt(Am^2 + (AQY*PAR)^2)))-Rd), data=., start=list(Am=(max(.$Pc)-min(.$Pc)),  AQY=0.001, Rd=-min(.$Pc)) -->
+<!-- Aquatic Photosynthesis, Falkowski  -->
+<!-- PAR = irradiance from 400-700nm (also called I or E) -->
+<!-- PC = oxygen flux rate -->
+<!-- Pmax = max photosynthesis (also called Am)   -->
+<!-- alpha = quantum yeild (also called AQY)   -->
+<!-- I or E or PAR = irradiance  -->
+<!-- Rd = dark respiration -->
+<!-- Ik (saturating irradiance) is the point at which photosynthesis reaches the max of initial slope = Am/AQY -->
+<!-- Ic=(Am*Rd)/(AQY*(sqrt(Am^2-Rd^2))) -->
+<!-- Equation for Ic derived from quadratic equation above. Ic = Par when Pc = 0 (x intercept). Ic = light compensation point; point at which photosynthesis is released from carbon limitation.  -->
+
+<!-- Run nls model  -->
+<!-- Using flexible initial values based on input data:  -->
+<!-- ```{r} -->
+<!-- nls_data <- Data %>%  -->
+<!--    group_by(colony_id) %>% -->
+<!--    nest(-colony_id) %>% -->
+<!--    mutate(model1 = map(data, ~  -->
+<!--                          nls(Pc ~ (Am*((AQY*PAR)/(sqrt(Am^2 + (AQY*PAR)^2)))-Rd), data=., start=list(Am=(max(.$Pc)-min(.$Pc)),  AQY=0.001, Rd=-min(.$Pc))) %>% -->
+<!--                               tidy %>% -->
+<!--                               dplyr::select(term, estimate) %>%  -->
+<!--                               spread(term, estimate))) %>% -->
+<!--   unnest(model1) %>% -->
+<!--   unnest(data) %>% -->
+<!--   group_by(colony_id) %>% -->
+<!--   summarise(Am=mean(Am), AQY=mean(AQY), Rd=mean(Rd))%>% -->
+<!--   mutate(Ik=Am/AQY)%>% -->
+<!--   mutate(Ic=(Am*Rd)/(AQY*(sqrt(Am^2-Rd^2)))) -->
+
+<!--   write_csv(nls_data, "output/pi_curve_pars_nls.csv") -->
+<!-- ``` -->
+
+
+<!-- Plot curve over data points.   -->
+<!-- ```{r} -->
+<!-- augmented <- Data %>%  -->
+<!--   nest(-colony_id) %>%  -->
+<!--   mutate( -->
+<!--     fit = map(data, ~ nls(Pc ~ (Am*((AQY*PAR)/(sqrt(Am^2 + (AQY*PAR)^2)))-Rd), data=., start=list(Am=0.7,  AQY=0.001, Rd=.4))), -->
+<!--     augmented = map(fit, augment), -->
+<!--   ) %>%  -->
+<!--   unnest(augmented) -->
+
+<!-- #all colonies together -->
+<!-- augmented %>% -->
+<!--   group_by(colony_id)%>% -->
+<!--   qplot(PAR, Pc, data = ., geom = 'point', colour = colony_id) + -->
+<!--   geom_line(aes(y=.fitted))+ -->
+<!--   theme(legend.position="none") -->
+
+<!-- #view by certain colonies to ground truth values  -->
+<!-- augmented %>% -->
+<!--   group_by(colony_id)%>% -->
+<!--   filter(colony_id=="ACR-139")%>% -->
+<!--   qplot(PAR, Pc, data = ., geom = 'point', colour = colony_id) + -->
+<!--   geom_line(aes(y=.fitted))+ -->
+<!--   theme(legend.position="none") -->
+
+<!-- #view individual plots -->
+<!-- by(augmented,augmented$colony_id, function(i) { -->
+<!--   ggplot(i) + -->
+<!--           geom_point(aes(PAR, Pc, group=colony_id)) +  -->
+<!--           geom_line(aes(y=.fitted, x=PAR)) +  -->
+<!--           theme_classic()+ -->
+<!--           labs(x = expression(paste('PAR (', mu, "mol photons m"^-2, 's'^-1,")")), -->
+<!--                y = expression(paste('Photosynthetic rate (', mu, "mol cm"^-2, 'h'^-1,")")), -->
+<!--                title = paste0("1_", augmented$colony_id)) -->
+<!-- }) -->
+
+<!-- ``` -->
+
+<!-- PI curve fitted parameters for each individual -->
+<!-- ```{r} -->
+<!-- pars <- nls_data -->
+<!-- md <- read_csv("data/1_pi_curves/coral_metadata.csv") -->
+<!-- df <- left_join(pars, md) -->
+
+<!-- df <- df %>% -->
+<!--   pivot_longer(cols=Am:Ik, names_to="variable") -->
+
+<!-- # Facet grid for each variable -->
+<!-- jpeg("output/PI_metrics_nls.jpg") -->
+<!-- PI.params <- df %>% -->
+<!--   ggplot(aes(x = species, y = value,fill=species)) + -->
+<!--   geom_boxplot(alpha = 0.6) + -->
+<!--   scale_fill_manual(values=c("green", "cyan", "black", "orange"))+ -->
+<!--   facet_wrap(~variable*Temp.Cat, scales = "free_y", nrow=4) + -->
+<!--   geom_jitter(width = 0.1)+ -->
+<!--   theme_classic()+ -->
+<!--   theme(legend.position="none")+ -->
+<!--   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))+ -->
+<!--   scale_x_discrete(labels=c("Diploria labyrinthiformis" = "Dlab", "Madracis decactis" = "Mdec", -->
+<!--                               "Montastraea cavernosa" = "Mcav", "Porites astreoides" = "Past")) -->
+<!-- PI.params -->
+<!-- dev.off() -->
+<!-- ``` -->
+
+
+<!-- Load rate data and metadata -->
+<!-- ```{r, warning=FALSE, message=FALSE} -->
+<!-- pars <- read_csv("output/pi_curve_pars_nls.csv") -->
+<!-- md <- read_csv("data/1_pi_curves/coral_metadata.csv") -->
+<!-- df <- left_join(pars, md) -->
+
+<!-- df$Am.log10 <-log10(df$Am+1) -->
+<!-- df$AQY.log10 <-log10(df$AQY+1) -->
+<!-- df$Rd.log10 <-log10(df$Rd+1) -->
+<!-- df$Ik.log10 <-log10(df$Ik+1) -->
+
+<!-- # add a group name by pasting Temperature and Treatment -->
+<!-- df$group <- paste0(df$species,"_", df$Temp.Cat) -->
+<!-- df$id_group <- paste0(df$colony_id,"_", df$Temp.Cat) -->
+
+<!-- df <- df %>% -->
+<!--   pivot_longer(cols=Am:Ic, names_to="variable") -->
+<!-- ``` -->
+
+<!-- Visualize data  -->
+<!-- ```{r, warning=FALSE, message=FALSE} -->
+<!-- # Visualize data -->
+<!-- r_plot<-df %>% -->
+<!--     ggplot(., aes(x = Temp.Cat, y = value, colour=species)) + -->
+<!--     geom_point(aes(fill=species, group=species), pch = 21, size=2, alpha=0.5) +  -->
+<!--     xlab("Temperature") +  -->
+<!--     facet_wrap(vars(variable), scales = "free_y", nrow = 2, strip.position = "top") + -->
+<!--     theme_classic() +  -->
+<!--     theme(legend.position="none", -->
+<!--       axis.title=element_text(face="bold", size=16), -->
+<!--       axis.text=element_text(size=12, color="black"),  -->
+<!--       legend.title=element_text(face="bold", size=14),  -->
+<!--       legend.text=element_text(size=12)); r_plot -->
+
+<!-- #ggsave("output/Pmax_Scatter_withOutliers.pdf", r_plot, dpi=300, w=8, h=8, units="in") -->
+<!-- ``` -->
+
+<!-- View and remove outliers.    -->
+<!-- ```{r, warning=FALSE, message=FALSE} -->
+<!-- #identify outliers by Temperature and Treatment groups -->
+<!-- outlier.plot <- ggbetweenstats(df,group, AQY.log10, outlier.tagging = TRUE) -->
+<!-- ggsave("output/Pmax_outliersbygroup.pdf", outlier.plot, dpi=300, w=16, h=8, units="in") -->
+
+<!-- # #set quantile values -->
+<!-- # q <- c(0.25, 0.75) -->
+<!-- #  -->
+<!-- # # calculate quantile values by Temperature and Treatment groups -->
+<!-- # Quants <- df %>% -->
+<!-- #   group_by(species, Temp.Cat) %>% -->
+<!-- #   summarize(quant25 = quantile(AQY.log10, probs = q[1]), -->
+<!-- #             quant75 = quantile(AQY.log10, probs = q[2]), -->
+<!-- #             IQRbyGroup=IQR(AQY.log10)) -->
+<!-- #  -->
+<!-- # # add a group name by pasting Temperature and Treatment -->
+<!-- # Quants$group <-paste0(Quants$species,"_", Quants$Temp.Cat) -->
+<!-- #  -->
+<!-- # #Calculate Quantile upper and lower ranges  -->
+<!-- # Quants$upper <-  Quants$quant75+1.5*Quants$IQRbyGroup # Upper Range   -->
+<!-- # Quants$lower <- Quants$quant25-1.5*Quants$IQRbyGroup # Lower Range -->
+<!-- #  -->
+<!-- # #join outlier cutoffs with rate data -->
+<!-- # df <- left_join(df, Quants, by=group) -->
+<!-- #  -->
+<!-- # #remove outliers from rates -->
+<!-- # x <- df %>% -->
+<!-- #   filter(AQY.log10 < upper) %>% -->
+<!-- #   filter(AQY.log10 > lower) #%>% -->
+<!-- #   #filter(rate < 0.125) -->
+<!-- #  -->
+<!-- # # Visualize data following outlier removal -->
+<!-- # r_plot<-df %>% -->
+<!-- #     ggplot(., aes(x = Temp.Cat, y = AQY.log10, colour=species)) + -->
+<!-- #     geom_point(aes(fill=species, group=species), pch = 21, size=2, alpha=0.5) +  -->
+<!-- #     xlab("Temperature") +  -->
+<!-- #     #scale_fill_manual(name="Treatment", values=c("#3450A3","#E9A33D"))+ -->
+<!-- #     #scale_color_manual(name="Treatment", values=c("#3450A3","#E9A33D"))+ -->
+<!-- #     ylab(expression(bold(paste(" Log 10 Pmax (µmol ", O[2], " cm"^-2, "h"^-1, ")")))) + -->
+<!-- #     theme_classic() +  -->
+<!-- #     theme(legend.position="none", -->
+<!-- #       axis.title=element_text(face="bold", size=16), -->
+<!-- #       axis.text=element_text(size=12, color="black"),  -->
+<!-- #       legend.title=element_text(face="bold", size=14),  -->
+<!-- #       legend.text=element_text(size=12)); r_plot -->
+<!-- #  -->
+<!-- # ggsave("output/Pmax_Scatter_Outliers_Removed.pdf", r_plot, dpi=300, w=8, h=8, units="in") -->
+
+<!-- ``` -->
+
+<!-- # **Statistical Analysis**     -->
+
+<!-- TPC fitting  -->
+<!-- Padifeld et al **rTPC and nls.multstart: A new pipeline to fit thermal performance curves in r**   -->
+<!-- https://besjournals.onlinelibrary.wiley.com/doi/full/10.1111/2041-210X.13585   -->
+
+<!-- Sharpe Schoolfield 1981 model -->
+<!-- Schoolfield, R. M., Sharpe, P. J. H., & Magnuson, C. E. (1981). Non-linear regression of biological temperature-dependent rate models based on absolute reaction-rate theory. Journal of theoretical biology, 88(4), 719-731. https://doi.org/10.1016/0022-5193(81)90246-0 -->
+
+<!-- ```{r} -->
+
+<!-- # choose model -->
+<!-- get_model_names() -->
+<!-- #sharpeschoolhigh_1981 -->
+
+<!-- # get start vals -->
+<!-- start_vals <- get_start_vals(df$Temp.Cat,df$AQY.log10, model_name = 'sharpeschoolhigh_1981') -->
+
+<!-- # get limits -->
+<!-- low_lims <- get_lower_lims(df$Temp.Cat,df$AQY.log10, model_name = 'sharpeschoolhigh_1981') -->
+<!-- upper_lims <- get_upper_lims(df$Temp.Cat,df$AQY.log10, model_name = 'sharpeschoolhigh_1981') -->
+
+<!-- #view values -->
+<!-- start_vals -->
+<!-- low_lims -->
+<!-- upper_lims -->
+<!-- ``` -->
+
+
+<!-- Dlab CURVE FIT -->
+<!-- ```{r} -->
+<!-- Dlab.df <- df %>%  -->
+<!--   filter(species=="Diploria labyrinthiformis") %>%  -->
+<!--   filter(!id_group=="Dlab-F6_26") -->
+
+<!-- #fit  -->
+<!-- Dlab.fit <- nls_multstart(Am.log10~sharpeschoolhigh_1981(temp = Temp.Cat, r_tref,e,eh,th, tref = 28), -->
+<!--                                                      data = Dlab.df, -->
+<!--                                                      iter = 500, -->
+<!--                                                      start_lower = start_vals - 1, -->
+<!--                                                      start_upper = start_vals + 1, -->
+<!--                                                      lower = low_lims, -->
+<!--                                                      upper = upper_lims, -->
+<!--                                                      supp_errors = 'Y') -->
+
+<!-- Dlab.fit -->
+
+<!-- #generate the predicted data -->
+<!-- Dlab_new_data <- data.frame(temp = seq(min(Dlab.df$Temp.Cat), max(Dlab.df$Temp.Cat), 0.61)) -->
+<!-- Dlab.preds <- augment(Dlab.fit, newdata = Dlab_new_data) -->
+
+<!-- #calculate TPC parameters -->
+<!-- Dlab.TCP.res <- calc_params(Dlab.fit) %>% -->
+<!--   mutate_all(round, 2)   # round  -->
+
+<!-- Dlab.TCP.res -->
+
+<!-- ### Bootstrapping  curve fit     -->
+
+<!-- #Resampling the original data with replacement -->
+
+<!-- # refit model using nlsLM -->
+<!-- Dlab.fit_nlsLM <- minpack.lm::nlsLM(Am.log10~sharpeschoolhigh_1981(temp = Temp.Cat, r_tref,e,eh,th, tref = 28), -->
+<!--                         data = Dlab.df, -->
+<!--                         start = coef(Dlab.fit), -->
+<!--                         lower = low_lims, -->
+<!--                         upper = upper_lims, -->
+<!--                         weights = rep(1, times = nrow(Dlab.df))) -->
+
+<!-- # bootstrap using case resampling -->
+<!-- Dlab.boot1 <- Boot(Dlab.fit_nlsLM, method = 'case') -->
+
+<!-- # look at the data -->
+<!-- head(Dlab.boot1$t) -->
+
+
+<!-- # create predictions of each bootstrapped model -->
+<!-- Dlab.boot1_preds <- Dlab.boot1$t %>% -->
+<!--   as.data.frame() %>% -->
+<!--   drop_na() %>% -->
+<!--   mutate(iter = 1:n()) %>% -->
+<!--   group_by_all() %>% -->
+<!--   do(data.frame(temp = seq(min(Dlab.df$Temp.Cat), max(Dlab.df$Temp.Cat), length.out = 100))) %>% -->
+<!--   ungroup() %>% -->
+<!--   mutate(pred = sharpeschoolhigh_1981(temp, r_tref, e, eh, th, tref = 28)) -->
+
+<!-- # calculate bootstrapped confidence intervals -->
+<!-- Dlab.boot1_conf_preds <- group_by(Dlab.boot1_preds, temp) %>% -->
+<!--   summarise(conf_lower = quantile(pred, 0.025), -->
+<!--             conf_upper = quantile(pred, 0.975)) %>% -->
+<!--   ungroup() -->
+
+<!-- # plot bootstrapped CIs -->
+<!-- Dlab.CI.plot <- ggplot() + -->
+<!--   #geom_line(aes(temp, .fitted), Dlab.preds, col = '#3450A3') + -->
+<!--   geom_ribbon(aes(temp, ymin = conf_lower, ymax = conf_upper), Dlab.boot1_conf_preds, fill = 'green', alpha = 0.3) + -->
+<!--   geom_point(aes(Temp.Cat, Am.log10), Dlab.df, size = 2, alpha = 0.5,col = 'green') + -->
+<!--   theme_bw(base_size = 12) + -->
+<!--   labs(x = 'Temperature (ºC)', -->
+<!--        y = 'Log 10 Pmax (µmol O2/cm2/hr)') -->
+<!-- Dlab.CI.plot  -->
+
+<!-- ``` -->
+
+<!-- Mdec CURVE FIT -->
+<!-- ```{r} -->
+<!-- Mdec.df <- df %>%  -->
+<!--   filter(species=="Madracis decactis") %>% -->
+<!--   filter(!id_group=="Mdec-B6_26") %>% filter(!id_group=="Mdec-D7_36") -->
+
+<!-- #fit  -->
+<!-- Mdec.fit <- nls_multstart(AQY.log10~sharpeschoolhigh_1981(temp = Temp.Cat, r_tref,e,eh,th, tref = 28), -->
+<!--                                                      data = Mdec.df, -->
+<!--                                                      iter = 500, -->
+<!--                                                      start_lower = start_vals - 1, -->
+<!--                                                      start_upper = start_vals + 1, -->
+<!--                                                      lower = low_lims, -->
+<!--                                                      upper = upper_lims, -->
+<!--                                                      supp_errors = 'Y') -->
+
+<!-- Mdec.fit -->
+
+<!-- #generate the predicted data -->
+<!-- Mdec_new_data <- data.frame(temp = seq(min(Mdec.df$Temp.Cat), max(Mdec.df$Temp.Cat), 0.6)) -->
+<!-- Mdec.preds <- augment(Mdec.fit, newdata = Mdec_new_data) -->
+
+<!-- #calculate TPC parameters -->
+<!-- Mdec.TCP.res <- calc_params(Mdec.fit) %>% -->
+<!--   mutate_all(round, 2)   # round  -->
+
+<!-- Mdec.TCP.res -->
+
+<!-- ### Bootstrapping  curve fit     -->
+
+<!-- #Resampling the original data with replacement -->
+
+<!-- # refit model using nlsLM -->
+<!-- Mdec.fit_nlsLM <- minpack.lm::nlsLM(AQY.log10~sharpeschoolhigh_1981(temp = Temp.Cat, r_tref,e,eh,th, tref = 28), -->
+<!--                         data = Mdec.df, -->
+<!--                         start = coef(Mdec.fit), -->
+<!--                         lower = low_lims, -->
+<!--                         upper = upper_lims, -->
+<!--                         weights = rep(1, times = nrow(Mdec.df))) -->
+
+<!-- # bootstrap using case resampling -->
+<!-- Mdec.boot1 <- Boot(Mdec.fit_nlsLM, method = 'case') -->
+
+<!-- # look at the data -->
+<!-- head(Mdec.boot1$t) -->
+
+
+<!-- # create predictions of each bootstrapped model -->
+<!-- Mdec.boot1_preds <- Mdec.boot1$t %>% -->
+<!--   as.data.frame() %>% -->
+<!--   drop_na() %>% -->
+<!--   mutate(iter = 1:n()) %>% -->
+<!--   group_by_all() %>% -->
+<!--   do(data.frame(temp = seq(min(Mdec.df$Temp.Cat), max(Mdec.df$Temp.Cat), length.out = 100))) %>% -->
+<!--   ungroup() %>% -->
+<!--   mutate(pred = sharpeschoolhigh_1981(temp, r_tref, e, eh, th, tref = 28)) -->
+
+<!-- # calculate bootstrapped confidence intervals -->
+<!-- Mdec.boot1_conf_preds <- group_by(Mdec.boot1_preds, temp) %>% -->
+<!--   summarise(conf_lower = quantile(pred, 0.025), -->
+<!--             conf_upper = quantile(pred, 0.975)) %>% -->
+<!--   ungroup() -->
+
+<!-- # plot bootstrapped CIs -->
+<!-- Mdec.CI.plot <- ggplot() + -->
+<!--   #geom_line(aes(temp, .fitted), Mdec.preds, col = '#3450A3') + -->
+<!--   geom_ribbon(aes(temp, ymin = conf_lower, ymax = conf_upper), Mdec.boot1_conf_preds, fill = 'cyan', alpha = 0.3) + -->
+<!--   geom_point(aes(Temp.Cat, AQY.log10), Mdec.df, size = 2, alpha = 0.5,col = 'cyan') + -->
+<!--   theme_bw(base_size = 12) + -->
+<!--   labs(x = 'Temperature (ºC)', -->
+<!--        y = 'Log 10 Pmax (µmol O2/cm2/hr)') -->
+<!-- Mdec.CI.plot  -->
+
+<!-- ``` -->
+
+<!-- Mcav CURVE FIT -->
+<!-- ```{r} -->
+<!-- Mcav.df <- df %>%  -->
+<!--   filter(species=="Montastraea cavernosa")%>% -->
+<!--   filter(!id_group=="Mcav-D7_36") -->
+
+<!-- #fit  -->
+<!-- Mcav.fit <- nls_multstart(AQY.log10~sharpeschoolhigh_1981(temp = Temp.Cat, r_tref,e,eh,th, tref = 28), -->
+<!--                                                      data = Mcav.df, -->
+<!--                                                      iter = 500, -->
+<!--                                                      start_lower = start_vals - 1, -->
+<!--                                                      start_upper = start_vals + 1, -->
+<!--                                                      lower = low_lims, -->
+<!--                                                      upper = upper_lims, -->
+<!--                                                      supp_errors = 'Y') -->
+
+<!-- Mcav.fit -->
+
+<!-- #generate the predicted data -->
+<!-- Mcav_new_data <- data.frame(temp = seq(min(Mcav.df$Temp.Cat), max(Mcav.df$Temp.Cat), 0.6)) -->
+<!-- Mcav.preds <- augment(Mcav.fit, newdata = Mcav_new_data) -->
+
+<!-- #calculate TPC parameters -->
+<!-- Mcav.TCP.res <- calc_params(Mcav.fit) %>% -->
+<!--   mutate_all(round, 2)   # round  -->
+
+<!-- Mcav.TCP.res -->
+
+<!-- ### Bootstrapping  curve fit     -->
+
+<!-- #Resampling the original data with replacement -->
+
+<!-- # refit model using nlsLM -->
+<!-- Mcav.fit_nlsLM <- minpack.lm::nlsLM(AQY.log10~sharpeschoolhigh_1981(temp = Temp.Cat, r_tref,e,eh,th, tref = 28), -->
+<!--                         data = Mcav.df, -->
+<!--                         start = coef(Mcav.fit), -->
+<!--                         lower = low_lims, -->
+<!--                         upper = upper_lims, -->
+<!--                         weights = rep(1, times = nrow(Mcav.df))) -->
+
+<!-- # bootstrap using case resampling -->
+<!-- Mcav.boot1 <- Boot(Mcav.fit_nlsLM, method = 'case') -->
+
+<!-- # look at the data -->
+<!-- head(Mcav.boot1$t) -->
+
+
+<!-- # create predictions of each bootstrapped model -->
+<!-- Mcav.boot1_preds <- Mcav.boot1$t %>% -->
+<!--   as.data.frame() %>% -->
+<!--   drop_na() %>% -->
+<!--   mutate(iter = 1:n()) %>% -->
+<!--   group_by_all() %>% -->
+<!--   do(data.frame(temp = seq(min(Mcav.df$Temp.Cat), max(Mcav.df$Temp.Cat), length.out = 100))) %>% -->
+<!--   ungroup() %>% -->
+<!--   mutate(pred = sharpeschoolhigh_1981(temp, r_tref, e, eh, th, tref = 28)) -->
+
+<!-- # calculate bootstrapped confidence intervals -->
+<!-- Mcav.boot1_conf_preds <- group_by(Mcav.boot1_preds, temp) %>% -->
+<!--   summarise(conf_lower = quantile(pred, 0.025), -->
+<!--             conf_upper = quantile(pred, 0.975)) %>% -->
+<!--   ungroup() -->
+
+<!-- # plot bootstrapped CIs -->
+<!-- Mcav.CI.plot <- ggplot() + -->
+<!--   #geom_line(aes(temp, .fitted), Mcav.preds, col = '#3450A3') + -->
+<!--   geom_ribbon(aes(temp, ymin = conf_lower, ymax = conf_upper), Mcav.boot1_conf_preds, fill = 'black', alpha = 0.3) + -->
+<!--   geom_point(aes(Temp.Cat, AQY.log10), Mcav.df, size = 2, alpha = 0.5,col = 'black') + -->
+<!--   theme_bw(base_size = 12) + -->
+<!--   labs(x = 'Temperature (ºC)', -->
+<!--        y = 'Log 10 Pmax (µmol O2/cm2/hr)') -->
+<!-- Mcav.CI.plot  -->
+
+<!-- ``` -->
+
+
+<!-- Past CURVE FIT -->
+<!-- ```{r} -->
+<!-- Past.df <- df %>%  -->
+<!--   filter(species=="Porites astreoides") %>% -->
+<!--   filter(!id_group=="Past-C6_26") %>% -->
+<!--   filter(!id_group=="Past-E7_36") -->
+
+<!-- #fit  -->
+<!-- Past.fit <- nls_multstart(AQY.log10~sharpeschoolhigh_1981(temp = Temp.Cat, r_tref,e,eh,th, tref = 28), -->
+<!--                                                      data = Past.df, -->
+<!--                                                      iter = 500, -->
+<!--                                                      start_lower = start_vals - 1, -->
+<!--                                                      start_upper = start_vals + 1, -->
+<!--                                                      lower = low_lims, -->
+<!--                                                      upper = upper_lims, -->
+<!--                                                      supp_errors = 'Y') -->
+
+<!-- Past.fit -->
+
+<!-- #generate the predicted data -->
+<!-- Past_new_data <- data.frame(temp = seq(min(Past.df$Temp.Cat), max(Past.df$Temp.Cat), 0.7)) -->
+<!-- Past.preds <- augment(Past.fit, newdata = Past_new_data) -->
+
+<!-- #calculate TPC parameters -->
+<!-- Past.TCP.res <- calc_params(Past.fit) %>% -->
+<!--   mutate_all(round, 2)   # round  -->
+
+<!-- Past.TCP.res -->
+
+<!-- ### Bootstrapping  curve fit     -->
+
+<!-- #Resampling the original data with replacement -->
+
+<!-- # refit model using nlsLM -->
+<!-- Past.fit_nlsLM <- minpack.lm::nlsLM(AQY.log10~sharpeschoolhigh_1981(temp = Temp.Cat, r_tref,e,eh,th, tref = 28), -->
+<!--                         data = Past.df, -->
+<!--                         start = coef(Past.fit), -->
+<!--                         lower = low_lims, -->
+<!--                         upper = upper_lims, -->
+<!--                         weights = rep(1, times = nrow(Past.df))) -->
+
+<!-- # bootstrap using case resampling -->
+<!-- Past.boot1 <- Boot(Past.fit_nlsLM, method = 'case') -->
+
+<!-- # look at the data -->
+<!-- head(Past.boot1$t) -->
+
+
+<!-- # create predictions of each bootstrapped model -->
+<!-- Past.boot1_preds <- Past.boot1$t %>% -->
+<!--   as.data.frame() %>% -->
+<!--   drop_na() %>% -->
+<!--   mutate(iter = 1:n()) %>% -->
+<!--   group_by_all() %>% -->
+<!--   do(data.frame(temp = seq(min(Past.df$Temp.Cat), max(Past.df$Temp.Cat), length.out = 100))) %>% -->
+<!--   ungroup() %>% -->
+<!--   mutate(pred = sharpeschoolhigh_1981(temp, r_tref, e, eh, th, tref = 28)) -->
+
+<!-- # calculate bootstrapped confidence intervals -->
+<!-- Past.boot1_conf_preds <- group_by(Past.boot1_preds, temp) %>% -->
+<!--   summarise(conf_lower = quantile(pred, 0.025), -->
+<!--             conf_upper = quantile(pred, 0.975)) %>% -->
+<!--   ungroup() -->
+
+<!-- # plot bootstrapped CIs -->
+<!-- Past.CI.plot <- ggplot() + -->
+<!--   #geom_line(aes(temp, .fitted), Past.preds, col = '#3450A3') + -->
+<!--   geom_ribbon(aes(temp, ymin = conf_lower, ymax = conf_upper), Past.boot1_conf_preds, fill = 'orange', alpha = 0.3) + -->
+<!--   geom_point(aes(Temp.Cat, AQY.log10), Past.df, size = 2, alpha = 0.5,col = 'orange') + -->
+<!--   theme_bw(base_size = 12) + -->
+<!--   labs(x = 'Temperature (ºC)', -->
+<!--        y = 'Log 10 Pmax (µmol O2/cm2/hr)') -->
+<!-- Past.CI.plot  -->
+
+<!-- ``` -->
+
+<!-- ```{r} -->
+<!--  #set plot colors -->
+<!-- cols <- c("Dlab"="green",  -->
+<!-- "Mdec"="cyan", -->
+<!-- "Mcav"="black", -->
+<!-- "Past"="orange") -->
+
+<!-- # plot data and model fit -->
+<!-- TPC.plot <- ggplot(data=df, aes()) + -->
+<!--    geom_point(aes(Temp.Cat, AQY.log10), color="green", Dlab.df, size = 2, alpha = 0.5) + -->
+<!--    geom_point(aes(Temp.Cat, AQY.log10), color="cyan", Mdec.df, size = 2, alpha = 0.5) + -->
+<!--    geom_point(aes(Temp.Cat, AQY.log10), color="black", Mcav.df, size = 2, alpha = 0.5) + -->
+<!--    geom_point(aes(Temp.Cat, AQY.log10), color="orange", Past.df, size = 2, alpha = 0.5) + -->
+<!--    geom_ribbon(aes(temp, ymin = conf_lower, ymax = conf_upper), Dlab.boot1_conf_preds, fill = "green", alpha = 0.3) + -->
+<!--    geom_ribbon(aes(temp, ymin = conf_lower, ymax = conf_upper), Mdec.boot1_conf_preds, fill = 'cyan', alpha = 0.3) + -->
+<!--   geom_ribbon(aes(temp, ymin = conf_lower, ymax = conf_upper), Mcav.boot1_conf_preds, fill = 'black', alpha = 0.3) + -->
+<!--   geom_ribbon(aes(temp, ymin = conf_lower, ymax = conf_upper), Past.boot1_conf_preds, fill = 'orange', alpha = 0.3) + -->
+<!--    xlim(15.5,40.5)+ -->
+<!--    scale_x_continuous(breaks=c(16,18,20,22,24,26,28,30,32,34,36,38,40))+ -->
+<!--    theme_bw(base_size = 12) + -->
+<!--    scale_colour_manual(name="Species",values=cols)+ -->
+<!--    theme(legend.position = "top", -->
+<!--          panel.border = element_blank(), panel.grid.major = element_blank(), -->
+<!--          panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"))+ -->
+<!--    labs(x = 'Temperature (ºC)', -->
+<!--         y = expression("Log 10 Rdark µmol Oxygen"~cm^{-2}~h^{-1})) -->
+
+<!-- TPC.plot  -->
+
+<!-- ggsave("output/TPC_SharpSchool.pdf", TPC.plot, dpi=300, w=8, h=8, units="in") -->
+
+<!-- ``` -->
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<!-- ### Bootstrapping curve fit    -->
+<!-- Resampling the original data with replacement -->
+<!-- ```{r} -->
+<!-- # refit model using nlsLM -->
+<!-- high.fit_nlsLM <- minpack.lm::nlsLM(rate~sharpeschoolhigh_1981(temp = temp, r_tref,e,eh,th, tref = 28), -->
+<!--                         data = d.high, -->
+<!--                         start = coef(high.fit), -->
+<!--                         lower = low_lims, -->
+<!--                         upper = upper_lims, -->
+<!--                         weights = rep(1, times = nrow(d.high))) -->
+
+<!-- # bootstrap using case resampling -->
+<!-- high.boot1 <- Boot(high.fit_nlsLM, method = 'case') -->
+
+<!-- # look at the data -->
+<!-- head(high.boot1$t) -->
+
+<!-- # create predictions of each bootstrapped model -->
+<!-- high.boot1_preds <- high.boot1$t %>% -->
+<!--   as.data.frame() %>% -->
+<!--   drop_na() %>% -->
+<!--   mutate(iter = 1:n()) %>% -->
+<!--   group_by_all() %>% -->
+<!--   do(data.frame(temp = seq(min(d.high$temp), max(d.high$temp), length.out = 100))) %>% -->
+<!--   ungroup() %>% -->
+<!--   mutate(pred = sharpeschoolhigh_1981(temp, r_tref, e, eh, th, tref = 28)) -->
+
+<!-- # calculate bootstrapped confidence intervals -->
+<!-- high.boot1_conf_preds <- group_by(high.boot1_preds, temp) %>% -->
+<!--   summarise(conf_lower = quantile(pred, 0.025), -->
+<!--             conf_upper = quantile(pred, 0.975)) %>% -->
+<!--   ungroup() -->
+
+<!-- # plot bootstrapped CIs -->
+<!-- high.CI.plot <- ggplot() + -->
+<!--   geom_line(aes(temp, .fitted), high.preds, col = "#E9A33D") + -->
+<!--   geom_ribbon(aes(temp, ymin = conf_lower, ymax = conf_upper), high.boot1_conf_preds, fill = '#E9A33D', alpha = 0.3) + -->
+<!--   geom_point(aes(temp, rate), d.high, size = 2, alpha = 0.5,col = "#E9A33D") + -->
+<!--   theme_bw(base_size = 12) + -->
+<!--   labs(x = 'Temperature (ºC)', -->
+<!--        y = 'Respiration Rate (µmol O2/larva/min') -->
+<!-- high.CI.plot -->
+
+<!-- ``` -->
+
+<!-- ```{r} -->
+<!--  #set plot colors -->
+<!-- cols <- c("ambient"="#3450A3", "high"="#E9A33D") -->
+
+<!-- # plot data and model fit -->
+<!-- TPC.plot <- ggplot(data=df, aes(x=temp)) + -->
+<!--    geom_point(aes(temp, rate, color="ambient"), d.amb, size = 2, alpha = 0.5) + -->
+<!--    geom_point(aes(temp, rate, color="high"), d.high, size = 2, alpha = 0.5) + -->
+<!--    geom_line(aes(temp, .fitted), amb.preds, col = '#3450A3', size=2) + -->
+<!--    geom_line(aes(temp, .fitted), high.preds, col = "#E9A33D", size=2) + -->
+<!--    geom_ribbon(aes(temp, ymin = conf_lower, ymax = conf_upper), high.boot1_conf_preds, fill = "#E9A33D", alpha = 0.3) + -->
+<!--    geom_ribbon(aes(temp, ymin = conf_lower, ymax = conf_upper), amb.boot1_conf_preds, fill = '#3450A3', alpha = 0.3) + -->
+<!--    xlim(21,33)+ -->
+<!--    scale_x_continuous(breaks=c(22,24,26,28,30,32,34,36))+ -->
+<!--    theme_bw(base_size = 12) + -->
+<!--    scale_colour_manual(name="Treatment",values=cols)+ -->
+<!--    theme(legend.position = c(0.55, 0.9), -->
+<!--          panel.border = element_blank(), panel.grid.major = element_blank(), -->
+<!--          panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"))+ -->
+<!--    labs(x = 'Temperature (ºC)', -->
+<!--         y = expression("Respiration Rate"~µmol~O[2] ~larva^{-1}~min^{-1})) -->
+
+<!-- TPC.plot  -->
+
+<!-- ggsave("Pacu2021/Figures/Respiration/TPC/TPC_SharpSchool.pdf", TPC.plot, dpi=300, w=8, h=8, units="in") -->
+
+<!-- ``` -->
+
+<!-- ### Confidence intervals of TPC parameters    -->
+
+<!-- ```{r} -->
+<!-- broom::tidy(amb.fit_nlsLM) -->
+<!-- broom::tidy(high.fit_nlsLM) -->
+
+<!-- #AMBIENT -->
+<!-- #calculate all the TPC parameters -->
+<!-- amb.extra_params <- calc_params(amb.fit_nlsLM) %>% -->
+<!--   pivot_longer(everything(), names_to =  'param', values_to = 'estimate') -->
+
+<!-- #calculate CIs for all the TPC parameters -->
+<!-- amb.ci_extra_params <- Boot(amb.fit_nlsLM, f = function(x){unlist(calc_params(x))}, labels = names(calc_params(amb.fit_nlsLM)), R = 200, method = 'case') %>% -->
+<!--   confint(., method = 'bca') %>% -->
+<!--   as.data.frame() %>% -->
+<!--   rename(conf_lower = 1, conf_upper = 2) %>% -->
+<!--   rownames_to_column(., var = 'param') %>% -->
+<!--   mutate(method = 'case bootstrap') -->
+
+<!-- #join the parameters and CIs   -->
+<!-- amb.ci_extra_params <- left_join(amb.ci_extra_params, amb.extra_params) -->
+<!-- amb.ci_extra_params$Treatment <- "Ambient" -->
+
+<!-- #HIGH -->
+<!-- #calculate all the TPC parameters -->
+<!-- high.extra_params <- calc_params(high.fit_nlsLM) %>% -->
+<!--   pivot_longer(everything(), names_to =  'param', values_to = 'estimate') -->
+
+<!-- #calculate CIs for all the TPC parameters -->
+<!-- high.ci_extra_params <- Boot(high.fit_nlsLM, f = function(x){unlist(calc_params(x))}, labels = names(calc_params(high.fit_nlsLM)), R = 200, method = 'case') %>% -->
+<!--   confint(., method = 'bca') %>% -->
+<!--   as.data.frame() %>% -->
+<!--   rename(conf_lower = 1, conf_upper = 2) %>% -->
+<!--   rownames_to_column(., var = 'param') %>% -->
+<!--   mutate(method = 'case bootstrap') -->
+
+<!-- #join the parameters and CIs   -->
+<!-- high.ci_extra_params <- left_join(high.ci_extra_params, high.extra_params) -->
+<!-- high.ci_extra_params$Treatment <- "High" -->
+
+<!-- #Join Ambient and High estimates and CIs -->
+<!-- All_params <- rbind(amb.ci_extra_params, high.ci_extra_params) -->
+<!-- All_params <- All_params %>%  -->
+<!--  mutate_if(is.numeric, round, 2) -->
+
+<!-- #Plot all of the estimates -->
+<!-- estimate.plots <- ggplot(All_params, aes(Treatment, estimate, color=Treatment)) + -->
+<!--   geom_point(size = 2) + -->
+<!--   scale_color_manual(name="Treatment", values=c("#3450A3","#E9A33D"))+ -->
+<!--   geom_linerange(aes(ymin = conf_lower, ymax = conf_upper)) + -->
+<!--   theme_bw() + -->
+<!--   facet_wrap(~param, scales = 'free_y') + -->
+<!--   scale_x_discrete('') -->
+
+<!-- estimate.plots -->
+
+<!-- #filter to only the most relavent and well characterized parameters -->
+<!-- All_params <- All_params %>%  -->
+<!--   filter(!param=="ctmin") %>% -->
+<!--   filter(!param=="ctmax") %>% -->
+<!--   filter(!param=="skewness") %>% -->
+<!--   filter(!param=="thermal_safety_margin") %>% -->
+<!--   filter(!param=="thermal_tolerance") %>% -->
+<!--   filter(!param=="q10")%>% -->
+<!--   filter(!param=="breadth") -->
+
+<!-- #view estimate plots -->
+<!-- estimate.plots <- ggplot(All_params, aes(Treatment, estimate, color=Treatment)) + -->
+<!--   geom_point(size = 2) + -->
+<!--   scale_color_manual(name="Treatment", values=c("#3450A3","#E9A33D"))+ -->
+<!--   geom_linerange(aes(ymin = conf_lower, ymax = conf_upper)) + -->
+<!--   theme_bw() + -->
+<!--   labs(y = NULL)+ -->
+<!--   theme(axis.title.x=element_blank(), -->
+<!--         axis.text.x=element_blank(), -->
+<!--         legend.position = "none", -->
+<!--         strip.background = element_blank(),  -->
+<!--         strip.placement = "outside") + -->
+<!--   facet_wrap(~param, scales = 'free_y', nrow=1,  -->
+<!--              labeller = as_labeller(c(e = "e (Energy)", eh = " eh (Energy)", rmax= "Rmax (~µmol~O[2] ~larva^{-1}~min^{-1})",topt="Topt (Temperature °C)")), strip.position = "left") + -->
+<!--   scale_x_discrete('') -->
+
+<!-- estimate.plots -->
+
+<!-- ggsave("Pacu2021/Figures/Respiration/TPC/TPC_estimates_SharpSchool.pdf", estimate.plots, dpi=300, w=6, h=2, units="in") -->
+<!-- ```  -->
+
+
+<!-- ```{r} -->
+<!-- #generate a combined figure of TPCs and estimate plots -->
+<!-- figure <- ggarrange(TPC.plot , estimate.plots, -->
+<!--                     labels = c("A", "B"), -->
+<!--                     ncol = 1, nrow = 2, -->
+<!--                     heights=c(1,0.5)) -->
+<!-- figure -->
+
+<!-- ggsave("Pacu2021/Figures/Figure5_TPC_estimates_SharpeSchoolfield.pdf", figure, dpi=300, w=6, h=8, units="in") -->
+<!-- ggsave("Pacu2021/Figures/Figure5_TPC_estimates_SharpeSchoolfield.jpg", figure, dpi=300, w=6, h=8, units="in") -->
+
+<!-- ```  -->
+

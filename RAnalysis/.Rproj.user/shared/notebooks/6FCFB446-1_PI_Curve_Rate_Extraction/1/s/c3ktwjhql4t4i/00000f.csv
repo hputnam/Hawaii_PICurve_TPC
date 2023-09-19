@@ -1,0 +1,7 @@
+"0","#Use start time of each light step from the metadata to separate data by light stop"
+"0","df <- df %>%"
+"0","  mutate(intervals = map2(data0, info, function(.x, .y) {"
+"0","    split(.x, f = cut(as.numeric(.x$Time), breaks = as.numeric(c(.y$Start.time, last(.y$Stop.time))),"
+"0","                      labels = as.character(.y$Light_Value)))})) %>%"
+"0","  mutate(data = map(intervals, ~ unnest(tibble(.), .id = ""Light_Value"")))"
+"0",""
