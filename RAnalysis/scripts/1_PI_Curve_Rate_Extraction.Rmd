@@ -206,8 +206,6 @@ write.csv(pr, "output/pi_curve_extracted_rates_Raw.csv")
 ```{r}
 
 ###Remove extra light step from Run 1
-pr <-pr %>% filter(!Light_Value>550)
-length(unique(pr$colony_id))
 
 # Correct for chamber volume 
 pr <- pr %>% mutate(micromol.s = micromol.L.s * Chamber.Vol.L)
@@ -238,7 +236,7 @@ anova(lm(micromol.s.blank~as.factor(Light_Value)*Temp.Cat, data=blanks))
 pr  <- left_join(pr ,blanks,by = "blank_id")
 length(unique(pr$colony_id))
 
-#subtract temp and light specific blnank values from samples
+#subtract temp and light specific blank values from samples
 pr <- pr %>%
   mutate(micromol.s.adj = micromol.s - micromol.s.blank) %>%
   # After correcting for blank values, remove blanks from data

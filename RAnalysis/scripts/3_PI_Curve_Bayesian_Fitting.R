@@ -30,80 +30,104 @@ Data$Pc <- as.numeric(Data$micromol.cm2.h)
 Data_sub <- Data 
 length(unique(Data$colony_id))
 
-ggplot(Data_sub, aes(x = PAR, y=Pc))+
+ggplot(Data_sub, aes(x = PAR, y=Pc, group=Species, color=Species))+
   geom_point()
+
+
 
 #set priors
 prior1 <- c(set_prior("normal(0, 5)", nlpar = "Am", lb = 0),
           set_prior("normal(0, 1)", nlpar = "AQY", lb = 0),
           set_prior("normal(0, 3)", nlpar = "Rd", lb = 0))
 
-# #model 
-# #Pc ~ (Am*((AQY*PAR)/(sqrt(Am^2 + (AQY*PAR)^2)))-Rd)
-# 
-# fit <- brm(bf(Pc ~ (Am*((AQY*PAR)/(sqrt(Am^2 + (AQY*PAR)^2)))-Rd), Am ~ 1, AQY ~ 1, Rd ~ 1, nl = TRUE), 
-#               data = Data_sub_Dlab_A1, family = gaussian(),
-#               prior = prior1,
-#               chains = 4, iter = 2000, seed = 333)
-# 
-# #model summary
-# summary(fit)
-# 
-# #plot model fit
-# plot(fit)
-# 
-# #posterior predictive checks
-# pp_check(fit)
-# 
-# #leave-one-out cross validation (LOO) method. The LOO assesses the predictive ability of posterior distributions 
-# #(a little like the pp_check function). It is a good way to assess the fit of your model. 
-# #You should look at the elpd estimate for each model, the higher value the better the fit. 
-# #By adding compare = TRUE, we get a comparison already done for us at the bottom of the summary. 
-# #The value with an elpd of 0 should appear, that’s the model that shows the best fit to our data.
-# loo(fit, compare = TRUE)
-# 
-# model_fit <- Data_sub_Dlab %>%
-#     add_predicted_draws(fit) %>%  # adding the posterior distribution
-#     ggplot(aes(x = PAR, y = Pc)) +  
-#     stat_lineribbon(aes(y = .prediction), .width = c(.95, .80, .50),  # regression line and CI
-#                     alpha = 0.5, colour = "black") +
-#     geom_point(data = Data_sub_Dlab, colour = "darkseagreen4", size = 3) +   # raw data
-#     scale_fill_brewer(palette = "Greys") +
-#     ylab("Oxygen Flux") +  # latin name for red knot
-#     xlab("PAR µmol m-2 s-1") +
-#     theme_bw() +
-#     theme(legend.title = element_blank(),
-#           legend.position = c(0.15, 0.85))
-# model_fit
-# 
-# #Am = Pmax
-# #AQY = alpha = photochemical efficiency
-# #Rd_Intercept = Rdark
-# #NEED TO ADD THESE CALCULATIONS TO THE PARAMETER LIST
-# #Ik=Am/AQY
-# #Ic=(Am*Rd)/(AQY*(sqrt(Am^2-Rd^2))))
-# fixef(fit)
-# 
-# 
-# # Extract posterior values for each parameter
-# samples1 <- posterior_samples(fit, "^b")
-# head(samples1)
-# 
-# # get the predicted draws from the model
-# pred_draws<-fit %>% 
-#   epred_draws(newdata = expand_grid(PAR = seq(1,800, by = 100)), 
-#               re_formula = NA)
-# 
-# # plot the fits
-# ggplot(pred_draws, 
-#        aes(x = PAR, y = .epred)) +
-#   stat_lineribbon() +
-#   geom_point(data =pred_draws, aes(x = PAR, y =.epred ) )+
-#   scale_fill_brewer(palette = "Reds") +
-#   labs(x = "PAR", y = "Rate",
-#        fill = "Credible interval") +
-#   theme_clean() +
-#   theme(legend.position = "bottom")
+
+Data_sub_Mcap <- Data %>%
+  filter(Species == "Montipora capitata")
+
+Data_sub_Pcomp <- Data %>%
+  filter(Species == "Porites compressa")
+
+#model
+#Pc ~ (Am*((AQY*PAR)/(sqrt(Am^2 + (AQY*PAR)^2)))-Rd)
+
+fit <- brm(bf(Pc ~ (Am*((AQY*PAR)/(sqrt(Am^2 + (AQY*PAR)^2)))-Rd), Am ~ 1, AQY ~ 1, Rd ~ 1, nl = TRUE),
+              data = Data_sub_Pcomp, family = gaussian(),
+              prior = prior1,
+              chains = 4, iter = 2000, seed = 333)
+
+#model summary
+summary(fit)
+
+#plot model fit
+plot(fit)
+
+#posterior predictive checks
+pp_check(fit)
+
+#leave-one-out cross validation (LOO) method. The LOO assesses the predictive ability of posterior distributions
+#(a little like the pp_check function). It is a good way to assess the fit of your model.
+#You should look at the elpd estimate for each model, the higher value the better the fit.
+#By adding compare = TRUE, we get a comparison already done for us at the bottom of the summary.
+#The value with an elpd of 0 should appear, that’s the model that shows the best fit to our data.
+loo(fit, compare = TRUE)
+
+Mcap_model_fit <- Data_sub_Mcap %>%
+    add_predicted_draws(fit) %>%  # adding the posterior distribution
+    ggplot(aes(x = PAR, y = Pc)) +
+    stat_lineribbon(aes(y = .prediction), .width = c(.95, .80, .50),  # regression line and CI
+                    alpha = 0.5, colour = "black") +
+    geom_point(data = Data_sub_Mcap, colour = "darkseagreen4", size = 3) +   # raw data
+    scale_fill_brewer(palette = "Greys") +
+    ylab("Oxygen Flux") +  # latin name for red knot
+    xlab("PAR µmol m-2 s-1") +
+    theme_bw() +
+    theme(legend.title = element_blank(),
+          legend.position = c(0.15, 0.85))
+Mcap_model_fit
+
+Pcomp_model_fit <- Data_sub_Pcomp %>%
+  add_predicted_draws(fit) %>%  # adding the posterior distribution
+  ggplot(aes(x = PAR, y = Pc)) +
+  stat_lineribbon(aes(y = .prediction), .width = c(.95, .80, .50),  # regression line and CI
+                  alpha = 0.5, colour = "black") +
+  geom_point(data = Data_sub_Pcomp, colour = "darkseagreen4", size = 3) +   # raw data
+  scale_fill_brewer(palette = "Greys") +
+  ylab("Oxygen Flux") +  # latin name for red knot
+  xlab("PAR µmol m-2 s-1") +
+  theme_bw() +
+  theme(legend.title = element_blank(),
+        legend.position = c(0.15, 0.85))
+Pcomp_model_fit
+
+
+#Am = Pmax
+#AQY = alpha = photochemical efficiency
+#Rd_Intercept = Rdark
+#NEED TO ADD THESE CALCULATIONS TO THE PARAMETER LIST
+#Ik=Am/AQY
+#Ic=(Am*Rd)/(AQY*(sqrt(Am^2-Rd^2))))
+fixef(fit)
+
+
+# Extract posterior values for each parameter
+samples1 <- posterior_samples(fit, "^b")
+head(samples1)
+
+# get the predicted draws from the model
+pred_draws<-fit %>%
+  epred_draws(newdata = expand_grid(PAR = seq(1,800, by = 100)),
+              re_formula = NA)
+
+# plot the fits
+ggplot(pred_draws,
+       aes(x = PAR, y = .epred)) +
+  stat_lineribbon() +
+  geom_point(data =pred_draws, aes(x = PAR, y =.epred ) )+
+  scale_fill_brewer(palette = "Reds") +
+  labs(x = "PAR", y = "Rate",
+       fill = "Credible interval") +
+  theme_clean() +
+  theme(legend.position = "bottom")
 
 #fit many models with a for loop
 
