@@ -47,6 +47,9 @@ Data_sub_Mcap <- Data %>%
 Data_sub_Pcomp <- Data %>%
   filter(Species == "Porites compressa")
 
+Data_sub_Pact <- Data %>%
+  filter(Species == "Pocillopora acuta")
+
 #model
 #Pc ~ (Am*((AQY*PAR)/(sqrt(Am^2 + (AQY*PAR)^2)))-Rd)
 
@@ -74,7 +77,7 @@ loo(fit, compare = TRUE)
 Mcap_model_fit <- Data_sub_Mcap %>%
     add_predicted_draws(fit) %>%  # adding the posterior distribution
     ggplot(aes(x = PAR, y = Pc)) +
-    stat_lineribbon(aes(y = .prediction), .width = c(.95, .80, .50),  # regression line and CI
+    stat_lineribbon(aes(y = .prediction), .width = c(.95),  # regression line and CI
                     alpha = 0.5, colour = "black") +
     geom_point(data = Data_sub_Mcap, colour = "darkseagreen4", size = 3) +   # raw data
     scale_fill_brewer(palette = "Greys") +
@@ -161,7 +164,7 @@ estimate.plots <-Data.out %>% filter(metric==".Estimate") %>%
   geom_point(size = 2) +
   #geom_linerange(aes(ymin = conf_lower, ymax = conf_upper)) +
   theme_bw() +
-  facet_wrap(~parameter*species.x)
+  facet_wrap(~parameter*species.x, scales="free_y")
 
 estimate.plots
 

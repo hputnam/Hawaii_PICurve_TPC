@@ -47,7 +47,7 @@ Date,colony_id,Chamber.Channel,Position,Bin.ID,Run,Species,Temp.Cat,Chamber.Vol.
 20230922,MCAP-E2,6,1,1,3,Montipora capitata,28,357,NA
 20230922,PCOM-F2,7,1,1,3,Porites compressa,28,357,NA
 20230922,PACT-H2,8,1,1,3,Pocillopora acuta,28,362,NA
-20230922,PACT-E1,1,1,1,4,Pocillopora acuta,18,367,NA
+20230922,PACT-F1,1,1,1,4,Pocillopora acuta,18,367,NA
 20230922,MCAP-C1,2,1,1,4,Montipora capitata,18,363,NA
 20230922,BK-7,3,1,1,4,Blank,18,373,NA
 20230922,PCOM-F1,4,1,1,4,Porites compressa,18,366,NA

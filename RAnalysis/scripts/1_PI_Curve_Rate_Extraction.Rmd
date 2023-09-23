@@ -205,7 +205,6 @@ write.csv(pr, "output/pi_curve_extracted_rates_Raw.csv")
 # Adjust rates by chamber volume, subtract blank, and normalize to surface area
 ```{r}
 
-###Remove extra light step from Run 1
 
 # Correct for chamber volume 
 pr <- pr %>% mutate(micromol.s = micromol.L.s * Chamber.Vol.L)
