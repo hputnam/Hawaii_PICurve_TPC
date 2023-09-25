@@ -168,3 +168,6 @@ estimate.plots <-Data.out %>% filter(metric==".Estimate") %>%
 
 estimate.plots
 
+ggsave("/Users/hputnam/MyProjects/Hawaii_PICurve_TPC/RAnalysis/output/pi_curve_bayes_estimates.pdf",estimate.plots,  width = 6, height=6)
+
+       
