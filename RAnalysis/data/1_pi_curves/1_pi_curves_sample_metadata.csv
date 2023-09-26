@@ -139,3 +139,60 @@ Date,colony_id,Chamber.Channel,Position,Bin.ID,Run,Species,Temp.Cat,Chamber.Vol.
 20230924,MCAP-B5,12,1,1,10,Montipora capitata,22,361,NA
 20230924,PACT-H5,13,1,1,10,Pocillopora acuta,22,364,NA
 20230924,PCOM-E5,14,1,1,10,Porites compressa,22,358,NA
+20230925,MCAP-C6,1,1,1,11,Montipora capitata,12,366,NA
+20230925,PCOM-D6,2,1,1,11,Porites compressa,12,362,NA
+20230925,BK-21,3,1,1,11,Blank,12,374,NA
+20230925,PACT-E6,4,1,1,11,Pocillopora acuta,12,367,NA
+20230925,MCAP-H6,5,1,1,11,Montipora capitata,12,363,NA
+20230925,PCOM-C6,6,1,1,11,Porites compressa,12,365,NA
+20230925,PACT-G6,7,1,1,11,Pocillopora acuta,12,366,NA
+20230925,PCOM-F6,8,1,1,11,Porites compressa,12,365,NA
+20230925,MCAP-B6,9,1,1,11,Montipora capitata,12,373,NA
+20230925,MCAP-G10,10,1,1,11,Montipora capitata,12,367,Read label wrong This is G10 not G6
+20230925,PCOM-A6,11,1,1,11,Porites compressa,12,360,temp probe 11 out of chamber
+20230925,BK-22,12,1,1,11,Blank,12,372,temp probe 12 in chamber 11
+20230925,MCAP-G6,13,1,1,11,Montipora capitata,12,364,NA
+20230925,PACT-B6,14,1,1,11,Pocillopora acuta,12,369,NA
+20230925,PACT-D6,15,1,1,11,Pocillopora acuta,12,374,NA
+20230925,MCAP-A6,1,1,1,12,Montipora capitata,12,376,NA
+20230925,MCAP-E6,2,1,1,12,Montipora capitata,12,357,NA
+20230925,PACT-H6,3,1,1,12,Pocillopora acuta,12,366,NA
+20230925,BK-23,4,1,1,12,Blank,12,372,NA
+20230925,MCAP-D6,5,1,1,12,Montipora capitata,12,360,NA
+20230925,PCOM-H6,6,1,1,12,Porites compressa,12,358,NA
+20230925,PACT-F6,7,1,1,12,Pocillopora acuta,12,372,NA
+20230925,PCOM-B6,8,1,1,12,Porites compressa,12,366,NA
+20230925,PACT-A6,9,1,1,12,Pocillopora acuta,12,372,NA
+20230925,MCAP-F6,10,1,1,12,Montipora capitata,12,370,NA
+20230925,PCOM-E6,11,1,1,12,Porites compressa,12,370,NA
+20230925,BK-24,12,1,1,12,Blank,12,376,NA
+20230925,PACT-C6,13,1,1,12,Pocillopora acuta,12,374,NA
+20230925,PCOM-G6,14,1,1,12,Porites compressa,12,371,NA
+20230925,MCAP-G7,1,1,1,13,Montipora capitata,35,366,NA
+20230925,PACT-A7,2,1,1,13,Pocillopora acuta,35,364,NA
+20230925,PCOM-E7,3,1,1,13,Porites compressa,35,360,NA
+20230925,MCAP-C7,4,1,1,13,Montipora capitata,35,359,NA
+20230925,BK-25,5,1,1,13,Blank,35,367,NA
+20230925,PCOM-G7,6,1,1,13,Porites compressa,35,342,NA
+20230925,PACT-C7,7,1,1,13,Pocillopora acuta,35,362,NA
+20230925,PCOM-B7,8,1,1,13,Porites compressa,35,357,NA
+20230925,MCAP-H7,9,1,1,13,Montipora capitata,35,365,NA
+20230925,MCAP-F7,10,1,1,13,Montipora capitata,35,359,NA
+20230925,BK-26,11,1,1,13,Blank,35,364,NA
+20230925,PACT-F7,12,1,1,13,Pocillopora acuta,35,363,NA
+20230925,PCOM-H7,13,1,1,13,Porites compressa,35,361,NA
+20230925,PACT-D7,14,1,1,13,Pocillopora acuta,35,359,NA
+20230925,MCAP-A7,1,1,1,14,Montipora capitata,35,367,NA
+20230925,PCOM-F7,2,1,1,14,Porites compressa,35,358,NA
+20230925,PACT-E7,3,1,1,14,Pocillopora acuta,35,365,NA
+20230925,PCOM-A7,4,1,1,14,Porites compressa,35,365,NA
+20230925,BK-27,5,1,1,14,Blank,35,373,dipping probe sheath raised up and exposed the to of the metal creating oscillations in the signal. Lowered sheath when noticed ~20min after start of run
+20230925,MCAP-E7,6,1,1,14,Montipora capitata,35,364,NA
+20230925,PCOM-D7,7,1,1,14,Porites compressa,35,366,NA
+20230925,MCAP-B7,8,1,1,14,Montipora capitata,35,368,NA
+20230925,PCOM-C7,9,1,1,14,Porites compressa,35,366,NA
+20230925,PACT-H7,10,1,1,14,Pocillopora acuta,35,367,NA
+20230925,BK-28,11,1,1,14,Blank,35,363,NA
+20230925,PACT-B7,12,1,1,14,Pocillopora acuta,35,368,NA
+20230925,MCAP-D7,13,1,1,14,Montipora capitata,35,365,NA
+20230925,PACT-G7,14,1,1,14,Pocillopora acuta,35,358,NA

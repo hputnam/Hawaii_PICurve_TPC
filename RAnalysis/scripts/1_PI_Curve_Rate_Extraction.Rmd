@@ -115,7 +115,7 @@ df %>%
 ```
 
 # Fit regressions to each interval for each sample
-```{r}
+```{r} 
 # Define function for fitting LoLinR regressions to be applied to all intervals for all samples
 fit_reg <- function(df) {
   rankLocReg(xall = as.numeric(df$Time), yall = df$Value, 

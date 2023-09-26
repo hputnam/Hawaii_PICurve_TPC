@@ -34,6 +34,20 @@ ggplot(Data_sub, aes(x = PAR, y=Pc, group=Species, color=Species))+
   geom_point()
 
 
+Data_sub <- Data_sub%>%
+  filter(colony_id != "MCAP-G5")
+
+ggplot(Data_sub, aes(x = PAR, y=Pc, group=Species, color=Species))+
+  geom_point()
+
+#Plot all of the estimates
+Data_sub %>%
+  ggplot(aes(PAR, Pc, color=Species)) +
+  geom_point(size = 2) +
+  theme_bw() +
+  facet_wrap(~Species)
+
+
 
 #set priors
 prior1 <- c(set_prior("normal(0, 5)", nlpar = "Am", lb = 0),
@@ -41,14 +55,14 @@ prior1 <- c(set_prior("normal(0, 5)", nlpar = "Am", lb = 0),
           set_prior("normal(0, 3)", nlpar = "Rd", lb = 0))
 
 
-Data_sub_Mcap <- Data %>%
-  filter(Species == "Montipora capitata")
-
-Data_sub_Pcomp <- Data %>%
-  filter(Species == "Porites compressa")
-
-Data_sub_Pact <- Data %>%
-  filter(Species == "Pocillopora acuta")
+# Data_sub_Mcap <- Data %>%
+#   filter(Species == "Montipora capitata")
+# 
+# Data_sub_Pcomp <- Data %>%
+#   filter(Species == "Porites compressa")
+# 
+# Data_sub_Pact <- Data %>%
+#   filter(Species == "Pocillopora acuta")
 
 # #model
 # #Pc ~ (Am*((AQY*PAR)/(sqrt(Am^2 + (AQY*PAR)^2)))-Rd)
