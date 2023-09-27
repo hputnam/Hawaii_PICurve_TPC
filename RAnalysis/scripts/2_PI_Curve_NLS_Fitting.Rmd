@@ -45,12 +45,52 @@ library(furrr)
 Data<-read_csv(here("output","pi_curve_extracted_rates.csv"))
 
 Data$PAR <- as.numeric(Data$Light_Value.x) 
-Data$Pc <- as.numeric(Data$micromol.cm2.h) 
+Data$Pc <- as.numeric(Data$micromol.cm2.s) 
 
 Data %>% 
 ggplot(aes(x=PAR, y=Pc, color=Species))+ 
   geom_point() 
+
+Data <- Data%>%
+  filter(colony_id != "MCAP-G5")
+
+raw.plot <- Data %>% 
+ggplot(aes(x=PAR, y=Pc, color=Species, group=colony_id))+ 
+  geom_point()+
+  geom_line()+
+  facet_wrap(~ Species*Temp,  ncol = 7)+
+  theme(legend.position = "none")
+
+ggsave("/Users/hputnam/MyProjects/Hawaii_PICurve_TPC/RAnalysis/output/pi_curve_raw_plots.pdf",raw.plot,  width = 10, height=6)
+
+
+ests <- Data%>%
+  group_by(Species, Temp)%>%
+  summarise(Rd= mean(min(Pc)),
+            Pmax = mean(max(Pc)))
+
+dirty.tpc.plot.Rd <- ests %>% 
+ggplot(aes(x=Temp, y=-Rd, color=Species, group=Species))+ 
+  geom_point()+
+  geom_line()+
+  facet_wrap(~ Species)+
+  theme(legend.position = "none")
+
+dirty.tpc.plot.Rd  
+
+
+dirty.tpc.plot.Pmax <- ests %>% 
+ggplot(aes(x=Temp, y=Pmax, color=Species, group=Species))+ 
+  geom_point()+
+  geom_line()+
+  facet_wrap(~ Species)+
+  theme(legend.position = "none")
+
+dirty.tpc.plot.Pmax 
+
 ``` 
+
+
 
 # Define PI curve function as a nonlinear Least Squares regression of a quadratic fit, test nls fit 
 #Pc ~ (Am*((AQY*PAR)/(sqrt(Am^2 + (AQY*PAR)^2)))-Rd), data=., start=list(Am=(max(.$Pc)-min(.$Pc)),  AQY=0.001, Rd=-min(.$Pc)) 
@@ -69,6 +109,8 @@ Run nls model
 Using flexible initial values based on input data:  
 ```{r} 
 nls_data <- Data %>%  
+  filter(Species== "Porites compressa") %>%
+  filter(colony_id != c("PCOM-C3")) %>%
    group_by(colony_id) %>% 
    nest(-colony_id) %>% 
    mutate(model1 = map(data, ~  
