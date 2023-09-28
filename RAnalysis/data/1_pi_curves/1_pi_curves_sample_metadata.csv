@@ -196,3 +196,31 @@ Date,colony_id,Chamber.Channel,Position,Bin.ID,Run,Species,Temp.Cat,Chamber.Vol.
 20230925,PACT-B7,12,1,1,14,Pocillopora acuta,35,368,NA
 20230925,MCAP-D7,13,1,1,14,Montipora capitata,35,365,NA
 20230925,PACT-G7,14,1,1,14,Pocillopora acuta,35,358,NA
+20230927,PCOM-C8,1,1,1,15,Porites compressa,25,366,NA
+20230927,BK-29,2,1,1,15,Blank,25,372,NA
+20230927,MCAP-C8,3,1,1,15,Montipora capitata,25,366,NA
+20230927,PACT-E8,4,1,1,15,Pocillopora acuta,25,367,NA
+20230927,PACT-G8,5,1,1,15,Pocillopora acuta,25,364,NA
+20230927,PCOM-A8,6,1,1,15,Porites compressa,25,356,NA
+20230927,MCAP-H8,7,1,1,15,Montipora capitata,25,366,NA
+20230927,PCOM-E8,8,1,1,15,Porites compressa,25,365,NA
+20230927,PACT-A8,9,1,1,15,Pocillopora acuta,25,372,NA
+20230927,MCAP-E8,10,1,1,15,Montipora capitata,25,371,NA
+20230927,PACT-B8,11,1,1,15,Pocillopora acuta,25,368,NA
+20230927,MCAP-G8,12,1,1,15,Montipora capitata,25,370,NA
+20230927,BK-30,13,1,1,15,Blank,25,374,NA
+20230927,PCOM-H8,14,1,1,15,Porites compressa,25,363,NA
+20230927,BK-31,1,1,1,16,Blank,25,374,NA
+20230927,MCAP-D8,2,1,1,16,Montipora capitata,25,360,NA
+20230927,PACT-F8,3,1,1,16,Pocillopora acuta,25,366,NA
+20230927,PCOM-B8,4,1,1,16,Porites compressa,25,353,NA
+20230927,MCAP-A8,5,1,1,16,Montipora capitata,25,360,NA
+20230927,PCOM-F8,6,1,1,16,Porites compressa,25,358,NA
+20230927,PACT-C8,7,1,1,16,Pocillopora acuta,25,364,NA
+20230927,MCAP-F8,8,1,1,16,Montipora capitata,25,357,NA
+20230927,PACT-D8,9,1,1,16,Pocillopora acuta,25,365,NA
+20230927,PCOM-G8,10,1,1,16,Porites compressa,25,359,NA
+20230927,PACT-H8,11,1,1,16,Pocillopora acuta,25,370,NA
+20230927,BK-32,12,1,1,16,Blank,25,373,NA
+20230927,PCOM-D8,13,1,1,16,Porites compressa,25,353,NA
+20230927,MCAP-B8,14,1,1,16,Montipora capitata,25,366,NA

@@ -58,19 +58,19 @@ raw.plot <- Data %>%
 ggplot(aes(x=PAR, y=Pc, color=Species, group=colony_id))+ 
   geom_point()+
   geom_line()+
-  facet_wrap(~ Species*Temp,  ncol = 7)+
+  facet_wrap(~ Species*Temp.Cat.x,  ncol = 8)+
   theme(legend.position = "none")
 
 ggsave("/Users/hputnam/MyProjects/Hawaii_PICurve_TPC/RAnalysis/output/pi_curve_raw_plots.pdf",raw.plot,  width = 10, height=6)
 
 
 ests <- Data%>%
-  group_by(Species, Temp)%>%
+  group_by(Species, Temp.Cat.x)%>%
   summarise(Rd= mean(min(Pc)),
             Pmax = mean(max(Pc)))
 
 dirty.tpc.plot.Rd <- ests %>% 
-ggplot(aes(x=Temp, y=-Rd, color=Species, group=Species))+ 
+ggplot(aes(x=Temp.Cat.x, y=-Rd, color=Species, group=Species))+ 
   geom_point()+
   geom_line()+
   facet_wrap(~ Species)+
@@ -80,7 +80,7 @@ dirty.tpc.plot.Rd
 
 
 dirty.tpc.plot.Pmax <- ests %>% 
-ggplot(aes(x=Temp, y=Pmax, color=Species, group=Species))+ 
+ggplot(aes(x=Temp.Cat.x, y=Pmax, color=Species, group=Species))+ 
   geom_point()+
   geom_line()+
   facet_wrap(~ Species)+

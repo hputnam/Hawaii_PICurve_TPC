@@ -267,7 +267,7 @@ length(unique(pr$colony_id))
 ```{r}
 # Select variables to write to file
 pr.out <- pr %>% 
-  select(Species, colony_id, Light_Value.x, Run, micromol.cm2.s, micromol.cm2.h)
+  select(Species, colony_id, Light_Value.x, Temp.Cat.x, Run, micromol.cm2.s, micromol.cm2.h)
 length(unique(pr.out$colony_id))
 
 # Write to output file
