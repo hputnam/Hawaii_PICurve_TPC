@@ -69,8 +69,12 @@ ests <- Data%>%
   summarise(Rd= mean(min(Pc)),
             Pmax = mean(max(Pc)))
 
+ests$Temp.Meas <-c(11.9, 18.15, 22.2, 25.55, 27.95,  31.8, 34.95, 38.95,
+                   11.9, 18.15, 22.2, 25.55, 27.95,  31.8, 34.95, 38.95,
+                   11.9, 18.15, 22.2, 25.55, 27.95,  31.8, 34.95, 38.95)
+
 dirty.tpc.plot.Rd <- ests %>% 
-ggplot(aes(x=Temp.Cat.x, y=-Rd, color=Species, group=Species))+ 
+ggplot(aes(x=Temp.Meas, y=-Rd, color=Species, group=Species))+ 
   geom_point()+
   geom_line()+
   facet_wrap(~ Species)+
@@ -80,7 +84,7 @@ dirty.tpc.plot.Rd
 
 
 dirty.tpc.plot.Pmax <- ests %>% 
-ggplot(aes(x=Temp.Cat.x, y=Pmax, color=Species, group=Species))+ 
+ggplot(aes(x=Temp.Meas, y=Pmax, color=Species, group=Species))+ 
   geom_point()+
   geom_line()+
   facet_wrap(~ Species)+
