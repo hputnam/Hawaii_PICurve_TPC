@@ -249,7 +249,7 @@ Date,colony_id,Chamber.Channel,Position,Bin.ID,Run,Species,Temp.Cat,Chamber.Vol.
 20230928,PCOM-E9,9,1,1,18,Porites compressa,30,362,NA
 20230928,PACT-C9,10,1,1,18,Pocillopora acuta,30,366,NA
 20230928,MCAP-G9,11,1,1,18,Montipora capitata,30,364,NA
-20230928,PCOM-G9,12,1,1,18,Porites compressa,30,364,NA
+20230928,PCOM-B9,12,1,1,18,Porites compressa,30,364,NA
 20230928,PACT-G9,13,1,1,18,Pocillopora acuta,30,365,NA
 20230928,BK-36,14,1,1,18,Blank,30,369,NA
 20230928,PACT-A10,1,1,1,19,Pocillopora acuta,26.8,361,mucus in water after. Coral too large for whirlpak
