@@ -132,6 +132,14 @@ df <- df %>%
     do(rankLcRg = fit_reg(.))
   }))
 
+#NEED TO ADD IN A LINE TO EXTRACT MEAN TEMPERATURE OF EACH LIGHT LEVEL
+# df <- df %>%
+#   mutate(regs = furrr::future_map(thin_data, function(.) {       # future_map executes function in parallel
+#     group_by(., Light_Value) %>%
+#     do(rankLcRg = fit_reg(.), 
+#        MeanTemp = summarise(., mean(Temp))
+#   }))
+
 ## Now 'regs' contains the fitted local regressions for each interval of each sample's thinned dataset
 
 # Define function to pull out and plot regression diagnostics

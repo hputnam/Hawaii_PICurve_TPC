@@ -110,22 +110,58 @@ Ic=(Am*Rd)/(AQY*(sqrt(Am^2-Rd^2)))
 Equation for Ic derived from quadratic equation above. Ic = Par when Pc = 0 (x intercept). Ic = light compensation point; point at which photosynthesis is released from carbon limitation.  
 
 Run nls model  
-Using flexible initial values based on input data:  
+Using flexible initial values based on input data: 
+
+Example
+```{r}
+require(ggplot2)
+library(nlraa)
+set.seed(1234)
+
+Data$PAR <- as.numeric(Data$Light_Value.x) 
+Data$Pc <- as.numeric(Data$micromol.cm2.s) 
+
+x <- Data$PAR
+y <- Data$Pc
+dat <- data.frame(x = x, y = y)
+fit <- nls(y ~ SSnrh(x, asym, phi, theta, rd), data = dat)
+## Visualize observed and simulated
+ggplot(data = dat, aes(x = x, y = y)) + 
+  geom_point() + 
+  geom_line(aes(y = fitted(fit)))
+## Testing predict function
+prd <- predict_nls(fit, interval = "confidence")
+datA <- cbind(dat, prd)
+## Plotting
+ggplot(data = datA, aes(x = x, y = y)) + 
+  geom_point() + 
+  geom_line(aes(y = fitted(fit))) + 
+  geom_ribbon(aes(ymin = Q2.5, ymax = Q97.5), 
+  fill = "purple", alpha = 0.3)
+
+
+```
+
+
 ```{r} 
 nls_data <- Data %>%  
-  filter(Species== "Porites compressa") %>%
-  filter(colony_id != c("PCOM-C3")) %>%
+  #filter(Species== "Porites compressa") %>%
    group_by(colony_id) %>% 
    nest(-colony_id) %>% 
    mutate(model1 = map(data, ~  
-                         nls(Pc ~ (Am*((AQY*PAR)/(sqrt(Am^2 + (AQY*PAR)^2)))-Rd), data=., start=list(Am=(max(.$Pc)-min(.$Pc)),  AQY=0.001, Rd=-min(.$Pc))) %>% 
+                         #nls(Pc ~ (Am*((AQY*PAR)/(sqrt(Am^2 + (AQY*PAR)^2)))-Rd), data=., start=list(Am=1,  AQY=0.001, Rd=-2)) 
+                         nls(Pc ~ SSnrh(PAR, asym, phi, theta, rd), data = Data)%>% 
+#asym=asymptote, 
+#phi=quantum efficiency, 
+#theta = curvature 
+#rd= dark respiration                  
                               tidy %>% 
                               dplyr::select(term, estimate) %>%  
                               spread(term, estimate))) %>% 
   unnest(model1) %>% 
   unnest(data) %>% 
-  group_by(colony_id) %>% 
-  summarise(Am=mean(Am), AQY=mean(AQY), Rd=mean(Rd))%>% 
+  #group_by(colony_id) %>% 
+  summarise(Am=mean(asym), AQY=mean(phi), theta= mean(theta), Rd=mean(rd))%>% 
   mutate(Ik=Am/AQY)%>% 
   mutate(Ic=(Am*Rd)/(AQY*(sqrt(Am^2-Rd^2)))) 
 
